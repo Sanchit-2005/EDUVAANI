@@ -1,0 +1,10 @@
+.env
+node_modules/
+flutter_app/.dart_tool/
+flutter_app/build/
+flutter_app/android/.gradle/
+ml_pipeline/data/processed.jsonl
+*.onnx
+*.tflite
+*.wav
+*.m4a

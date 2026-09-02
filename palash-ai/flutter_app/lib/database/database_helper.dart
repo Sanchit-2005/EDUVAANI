@@ -1,0 +1,170 @@
+import 'package:path/path.dart' as p;
+import 'package:sqflite/sqflite.dart';
+
+import '../models/lesson.dart';
+import 'seed_data.dart';
+
+class DatabaseHelper {
+  DatabaseHelper._();
+  static final DatabaseHelper instance = DatabaseHelper._();
+
+  static const _dbName = 'eduvaani.db';
+  static const _dbVersion = 6;
+  static const lessonsTable = 'lessons';
+  static const assessmentsTable = 'assessments';
+  static const progressTable = 'progress';
+  static const syncMetadataTable = 'sync_metadata';
+  static const translationsTable = 'translations';
+  static const benchmarkTable = 'benchmark_results';
+
+  Database? _database;
+
+  Future<Database> get database async {
+    final existing = _database;
+    if (existing != null && existing.isOpen) {
+      return existing;
+    }
+    _database = await _open();
+    return _database!;
+  }
+
+  Future<Database> _open() async {
+    final dbPath = await getDatabasesPath();
+    final path = p.join(dbPath, _dbName);
+    return openDatabase(
+      path,
+      version: _dbVersion,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
+    );
+  }
+
+  Future<void> _onCreate(Database db, int version) async {
+    await db.execute('''
+      CREATE TABLE $lessonsTable (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        grade TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        topic TEXT NOT NULL,
+        learningOutcome TEXT NOT NULL,
+        hindiInstruction TEXT NOT NULL,
+        santaliTranslation TEXT,
+        isPrototypeTranslation INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+    await _createAssessmentsTable(db);
+    await _createProgressTable(db);
+    await _createSyncMetadataTable(db);
+    await _createTranslationsTable(db);
+    await _createBenchmarkTable(db);
+    await SeedData.insertSeedData(db);
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) await _createAssessmentsTable(db);
+    if (oldVersion < 3) await _createProgressTable(db);
+    if (oldVersion < 4) await _createSyncMetadataTable(db);
+    if (oldVersion < 5) await _createTranslationsTable(db);
+    if (oldVersion < 6) await _createBenchmarkTable(db);
+  }
+
+  Future<void> _createAssessmentsTable(Database db) => db.execute('''
+      CREATE TABLE $assessmentsTable (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        grade TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        topic TEXT NOT NULL,
+        questionNumber INTEGER NOT NULL,
+        hindiText TEXT NOT NULL,
+        santaliText TEXT NOT NULL
+      )
+    ''');
+
+  Future<void> _createProgressTable(Database db) => db.execute('''
+      CREATE TABLE $progressTable (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        className TEXT NOT NULL UNIQUE,
+        students INTEGER NOT NULL,
+        lessonsCompleted INTEGER NOT NULL,
+        totalLessons INTEGER NOT NULL,
+        literacyPercent INTEGER NOT NULL,
+        numeracyPercent INTEGER NOT NULL,
+        vocabularyPercent INTEGER NOT NULL
+      )
+    ''');
+
+  Future<void> _createSyncMetadataTable(Database db) => db.execute('''
+      CREATE TABLE $syncMetadataTable (
+        id INTEGER PRIMARY KEY,
+        lastSyncedAt TEXT,
+        downloadedLessons INTEGER NOT NULL,
+        downloadedTranslations INTEGER NOT NULL,
+        downloadedModels INTEGER NOT NULL
+      )
+    ''');
+
+  Future<void> _createTranslationsTable(Database db) => db.execute('''
+      CREATE TABLE $translationsTable (
+        id INTEGER PRIMARY KEY,
+        hindi TEXT NOT NULL,
+        santali TEXT NOT NULL,
+        validationStatus TEXT NOT NULL
+      )
+    ''');
+
+  Future<void> _createBenchmarkTable(Database db) => db.execute('''
+      CREATE TABLE $benchmarkTable (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        asrMs INTEGER NOT NULL,
+        translationMs INTEGER NOT NULL,
+        ttsMs INTEGER NOT NULL,
+        totalMs INTEGER NOT NULL,
+        recordedAt TEXT NOT NULL
+      )
+    ''');
+
+  Future<List<Lesson>> getLessons({String? grade, String? subject}) async {
+    final db = await database;
+    final where = <String>[];
+    final args = <Object>[];
+    if (grade != null && grade.isNotEmpty) {
+      where.add('grade = ?');
+      args.add(grade);
+    }
+    if (subject != null && subject.isNotEmpty) {
+      where.add('subject = ?');
+      args.add(subject);
+    }
+    final rows = await db.query(
+      lessonsTable,
+      where: where.isEmpty ? null : where.join(' AND '),
+      whereArgs: args.isEmpty ? null : args,
+      orderBy: 'grade ASC, subject ASC, topic ASC',
+    );
+    return rows.map(Lesson.fromMap).toList();
+  }
+
+  Future<List<String>> getGrades() async {
+    final db = await database;
+    final rows = await db.rawQuery(
+      'SELECT DISTINCT grade FROM $lessonsTable ORDER BY grade',
+    );
+    return rows.map((row) => row['grade'] as String).toList();
+  }
+
+  Future<List<String>> getSubjects() async {
+    final db = await database;
+    final rows = await db.rawQuery(
+      'SELECT DISTINCT subject FROM $lessonsTable ORDER BY subject',
+    );
+    return rows.map((row) => row['subject'] as String).toList();
+  }
+
+  Future<void> close() async {
+    final existing = _database;
+    if (existing != null && existing.isOpen) {
+      await existing.close();
+    }
+    _database = null;
+  }
+}
