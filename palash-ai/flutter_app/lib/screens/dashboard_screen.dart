@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../core/app_theme.dart';
 import '../services/connectivity_service.dart';
-import '../widgets/app_widgets.dart';
 import 'assessments_screen.dart';
 import 'flashcards_screen.dart';
 import 'lessons_screen.dart';
@@ -11,6 +10,7 @@ import 'sync_screen.dart';
 import 'text_translator_screen.dart';
 import 'voice_translator_screen.dart';
 import 'worksheet_screen.dart';
+import 'santali_scanner/santali_scanner_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -25,86 +25,82 @@ class DashboardScreen extends StatelessWidget {
           SliverAppBar(
             expandedHeight: 200,
             pinned: true,
-            backgroundColor: AppColors.primary,
+            backgroundColor: AppColors.surface,
+            surfaceTintColor: AppColors.surface,
             flexibleSpace: FlexibleSpaceBar(
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // Gradient background
-                  Container(decoration: const BoxDecoration(gradient: AppGradients.brand)),
-
-                  // Decorative circles
-                  Positioned(
-                    top: -40,
-                    right: -30,
-                    child: _Circle(size: 180, opacity: 0.12),
-                  ),
-                  Positioned(
-                    bottom: 20,
-                    right: 60,
-                    child: _Circle(size: 80, opacity: 0.08),
-                  ),
-
-                  // Content
-                  Positioned(
-                    left: AppSpacing.md,
-                    right: AppSpacing.md,
-                    bottom: AppSpacing.lg,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(AppRadius.sm),
-                              ),
-                              child: const Icon(Icons.translate_rounded, color: Colors.white, size: 22),
+              background: Container(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  AppSpacing.xl,
+                  AppSpacing.md,
+                  AppSpacing.lg,
+                ),
+                color: AppColors.surface,
+                child: SafeArea(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(AppRadius.md),
                             ),
-                            const SizedBox(width: 10),
-                            const Text(
-                              'EduVaani',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 1.5,
-                              ),
+                            child: const Icon(
+                              Icons.translate_rounded,
+                              color: AppColors.primary,
+                              size: 22,
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        const Text(
-                          'Welcome, Teacher! 👋',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 26,
-                            fontWeight: FontWeight.w700,
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Language: Santali  ·  Grade 1',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.8),
-                            fontSize: 14,
+                          const SizedBox(width: 10),
+                          const Text(
+                            'EduVaani',
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.2,
+                            ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      const Text(
+                        'Welcome, Teacher!',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 26,
+                          fontWeight: FontWeight.w700,
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        'Language: Santali • Grade 1',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
             actions: [
               IconButton(
-                icon: const Icon(Icons.settings_outlined, color: Colors.white),
+                icon: const Icon(
+                  Icons.settings_outlined,
+                  color: AppColors.textPrimary,
+                ),
                 onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Settings arrive in a later phase.')),
+                  const SnackBar(
+                    content: Text('Settings arrive in a later phase.'),
+                  ),
                 ),
               ),
             ],
@@ -114,7 +110,11 @@ class DashboardScreen extends StatelessWidget {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
+                AppSpacing.md,
+                AppSpacing.md,
+                AppSpacing.md,
+                0,
+              ),
               child: const _ConnectivityBanner(),
             ),
           ),
@@ -123,7 +123,11 @@ class DashboardScreen extends StatelessWidget {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.md, AppSpacing.lg, AppSpacing.md, AppSpacing.sm),
+                AppSpacing.md,
+                AppSpacing.lg,
+                AppSpacing.md,
+                AppSpacing.sm,
+              ),
               child: Row(
                 children: [
                   Text(
@@ -131,7 +135,24 @@ class DashboardScreen extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(width: 6),
-                  PillBadge(text: '8 features', color: AppColors.primary),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: AppSpacing.xs,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(AppRadius.full),
+                    ),
+                    child: Text(
+                      '9 features',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -140,7 +161,11 @@ class DashboardScreen extends StatelessWidget {
           // ── Feature grid ──────────────────────────────
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md, 0, AppSpacing.md, AppSpacing.xl),
+              AppSpacing.md,
+              0,
+              AppSpacing.md,
+              AppSpacing.xl,
+            ),
             sliver: SliverGrid.count(
               crossAxisCount: 2,
               mainAxisSpacing: AppSpacing.md,
@@ -203,6 +228,13 @@ class DashboardScreen extends StatelessWidget {
                   color: AppColors.cardSync,
                   onTap: () => _open(context, const SyncScreen()),
                 ),
+                _FeatureCard(
+                  icon: Icons.image_search_rounded,
+                  title: 'Scan Santali',
+                  subtitle: 'Scan & translate text',
+                  color: AppColors.cardScanner,
+                  onTap: () => _open(context, const SantaliScannerScreen()),
+                ),
               ],
             ),
           ),
@@ -212,9 +244,7 @@ class DashboardScreen extends StatelessWidget {
   }
 
   static void _open(BuildContext context, Widget screen) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => screen),
-    );
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
   }
 }
 
@@ -237,14 +267,18 @@ class _ConnectivityBanner extends StatelessWidget {
           builder: (context, inner) {
             final online = inner.data ?? false;
             final color = online ? AppColors.success : AppColors.warning;
-            final icon = online ? Icons.cloud_done_rounded : Icons.cloud_off_rounded;
+            final icon = online
+                ? Icons.cloud_done_rounded
+                : Icons.cloud_off_rounded;
             final msg = online
                 ? 'Online — classroom content served locally.'
                 : 'Offline mode — downloaded content & AI available.';
 
             return Container(
               padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md, vertical: AppSpacing.sm + 2),
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm + 2,
+              ),
               decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(AppRadius.md),
@@ -256,7 +290,7 @@ class _ConnectivityBanner extends StatelessWidget {
                     width: 32,
                     height: 32,
                     decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.15),
+                      color: color.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
                     child: Icon(icon, color: color, size: 18),
@@ -309,84 +343,51 @@ class _FeatureCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              color,
-              Color.lerp(color, Colors.black, 0.18)!,
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(AppRadius.xl),
-          boxShadow: AppShadows.colored(color),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: Colors.white,
             borderRadius: BorderRadius.circular(AppRadius.xl),
-            splashColor: Colors.white.withValues(alpha: 0.15),
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Icon box
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(AppRadius.sm),
-                    ),
-                    child: Icon(icon, color: Colors.white, size: 24),
-                  ),
-                  const Spacer(),
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.75),
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            border: Border.all(color: AppColors.border, width: 1),
+            boxShadow: AppShadows.sm,
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Circle extends StatelessWidget {
-  const _Circle({required this.size, required this.opacity});
-  final double size;
-  final double opacity;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: Colors.white.withValues(alpha: opacity),
-          width: 1.5,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+                child: Icon(icon, color: color, size: 22),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                title,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

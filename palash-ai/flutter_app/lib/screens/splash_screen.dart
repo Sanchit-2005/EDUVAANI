@@ -28,23 +28,33 @@ class _SplashScreenState extends State<SplashScreen>
     );
 
     _logoScale = Tween<double>(begin: 0.6, end: 1.0).animate(
-      CurvedAnimation(parent: _ctrl, curve: const Interval(0.0, 0.6, curve: Curves.elasticOut)),
+      CurvedAnimation(
+        parent: _ctrl,
+        curve: const Interval(0.0, 0.6, curve: Curves.elasticOut),
+      ),
     );
 
     _logoOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _ctrl, curve: const Interval(0.0, 0.4, curve: Curves.easeOut)),
+      CurvedAnimation(
+        parent: _ctrl,
+        curve: const Interval(0.0, 0.4, curve: Curves.easeOut),
+      ),
     );
 
     _textOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _ctrl, curve: const Interval(0.45, 0.85, curve: Curves.easeOut)),
+      CurvedAnimation(
+        parent: _ctrl,
+        curve: const Interval(0.45, 0.85, curve: Curves.easeOut),
+      ),
     );
 
-    _textSlide = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _ctrl, curve: const Interval(0.45, 0.85, curve: Curves.easeOut)),
-    );
+    _textSlide = Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _ctrl,
+            curve: const Interval(0.45, 0.85, curve: Curves.easeOut),
+          ),
+        );
 
     _ctrl.forward();
     _bootstrap();
@@ -77,147 +87,124 @@ class _SplashScreenState extends State<SplashScreen>
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      body: Stack(
-        children: [
-          // ── Gradient background ───────────────────────
-          Container(
-            width: size.width,
-            height: size.height,
-            decoration: const BoxDecoration(gradient: AppGradients.brand),
+      body: Container(
+        width: size.width,
+        height: size.height,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF1E293B), Color(0xFF334155), Color(0xFFF8FAFC)],
           ),
-
-          // ── Decorative circles ────────────────────────
-          Positioned(
-            top: -80,
-            right: -60,
-            child: _DecorativeCircle(size: 260, opacity: 0.12),
-          ),
-          Positioned(
-            bottom: -100,
-            left: -80,
-            child: _DecorativeCircle(size: 320, opacity: 0.10),
-          ),
-          Positioned(
-            top: size.height * 0.35,
-            right: -30,
-            child: _DecorativeCircle(size: 140, opacity: 0.08),
-          ),
-
-          // ── Main content ──────────────────────────────
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Logo
-                ScaleTransition(
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              top: -80,
+              right: -70,
+              child: _DecorativeCircle(size: 260, opacity: 0.12),
+            ),
+            Positioned(
+              bottom: -100,
+              left: -80,
+              child: _DecorativeCircle(size: 320, opacity: 0.10),
+            ),
+            Center(
+              child: SlideTransition(
+                position: _textSlide,
+                child: ScaleTransition(
                   scale: _logoScale,
                   child: FadeTransition(
                     opacity: _logoOpacity,
                     child: Container(
-                      width: 110,
-                      height: 110,
+                      width: 320,
+                      padding: const EdgeInsets.all(AppSpacing.xl),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(AppRadius.xl),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.3),
-                          width: 1.5,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.2),
-                            blurRadius: 30,
-                            offset: const Offset(0, 12),
+                        border: Border.all(color: AppColors.border, width: 1),
+                        boxShadow: AppShadows.lg,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 88,
+                            height: 88,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(AppRadius.lg),
+                            ),
+                            child: const Icon(
+                              Icons.translate_rounded,
+                              size: 42,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          const Text(
+                            'EduVaani',
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 32,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          const Text(
+                            'Mother-Tongue Learning Assistant',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.sm,
+                              vertical: AppSpacing.xs,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(
+                                AppRadius.full,
+                              ),
+                            ),
+                            child: const Text(
+                              'Hindi ↔ Santali',
+                              style: TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          FadeTransition(
+                            opacity: _textOpacity,
+                            child: const SizedBox(
+                              width: 28,
+                              height: 28,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.8,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  AppColors.primary,
+                                ),
+                              ),
+                            ),
                           ),
                         ],
                       ),
-                      child: const Icon(
-                        Icons.translate_rounded,
-                        size: 56,
-                        color: Colors.white,
-                      ),
                     ),
                   ),
-                ),
-
-                const SizedBox(height: AppSpacing.lg),
-
-                // App name + taglines
-                SlideTransition(
-                  position: _textSlide,
-                  child: FadeTransition(
-                    opacity: _textOpacity,
-                    child: Column(
-                      children: [
-                        const Text(
-                          'EduVaani',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 36,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 2,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Mother-Tongue Learning Assistant',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.9),
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Offline-first AI · Hindi ↔ Santali',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.65),
-                            fontSize: 13,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: AppSpacing.xxl),
-
-                // Loading indicator
-                FadeTransition(
-                  opacity: _textOpacity,
-                  child: SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      color: Colors.white.withValues(alpha: 0.7),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // ── Version tag ───────────────────────────────
-          Positioned(
-            bottom: 36,
-            left: 0,
-            right: 0,
-            child: FadeTransition(
-              opacity: _textOpacity,
-              child: Text(
-                'v1.0 · Demo build',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.45),
-                  fontSize: 12,
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

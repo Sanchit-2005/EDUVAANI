@@ -30,13 +30,40 @@ class ModelUnavailableException implements Exception {
 /// Manages model files without loading every model into memory at once.
 class ModelManager {
   static const hindiAsr = ModelDescriptor(
-    id: 'hindi_asr', label: 'Hindi ASR', fileName: 'hindi_asr_int8.onnx', version: 'prototype',
+    id: 'hindi_asr',
+    label: 'Hindi ASR',
+    fileName: 'hindi_asr_int8.onnx',
+    version: 'prototype',
   );
   static const hindiSantaliTranslation = ModelDescriptor(
-    id: 'hindi_santali_translation', label: 'Hindi to Santali', fileName: 'hindi_santali_int8.onnx', version: 'prototype',
+    id: 'hindi_santali_translation',
+    label: 'Hindi to Santali',
+    fileName: 'hindi_santali_int8.onnx',
+    version: 'prototype',
   );
   static const santaliTts = ModelDescriptor(
-    id: 'santali_tts', label: 'Santali TTS', fileName: 'santali_tts_int8.onnx', version: 'prototype',
+    id: 'santali_tts',
+    label: 'Santali TTS',
+    fileName: 'santali_tts_int8.onnx',
+    version: 'prototype',
+  );
+  static const olChikiOcr = ModelDescriptor(
+    id: 'ol_chiki_ocr',
+    label: 'Ol Chiki OCR',
+    fileName: 'ol_chiki_ocr_int8.onnx',
+    version: 'prototype',
+  );
+  static const santaliHindiTranslation = ModelDescriptor(
+    id: 'santali_hindi_translation',
+    label: 'Santali to Hindi',
+    fileName: 'santali_hindi_int8.onnx',
+    version: 'prototype',
+  );
+  static const hindiTts = ModelDescriptor(
+    id: 'hindi_tts',
+    label: 'Hindi TTS',
+    fileName: 'hindi_tts_int8.onnx',
+    version: 'prototype',
   );
 
   Future<File> modelFile(ModelDescriptor model) async {
@@ -46,7 +73,8 @@ class ModelManager {
 
   Future<ModelStatus> status(ModelDescriptor model) async {
     final file = await modelFile(model);
-    return file.exists() ? ModelStatus.downloaded : ModelStatus.missing;
+    final exists = await file.exists();
+    return exists ? ModelStatus.downloaded : ModelStatus.missing;
   }
 
   Future<File> requireModel(ModelDescriptor model) async {

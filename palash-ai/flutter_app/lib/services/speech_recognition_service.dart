@@ -25,8 +25,7 @@ abstract class SpeechRecognitionService {
 /// classroom phrase. Replace this adapter with an on-device ASR engine later
 /// without changing the voice screen.
 class MockSpeechRecognitionService implements SpeechRecognitionService {
-  MockSpeechRecognitionService({required String demoTranscript})
-      : _demoTranscript = demoTranscript;
+  MockSpeechRecognitionService({required this._demoTranscript});
 
   final String _demoTranscript;
 

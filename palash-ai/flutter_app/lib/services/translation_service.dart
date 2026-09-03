@@ -113,6 +113,7 @@ class MockTranslationService implements TranslationService {
     'अच्छा': 'ᱵᱟᱹᱲᱤᱡᱽ',
   };
 
+  @override
   TranslationResult hindiToSantali(String input) {
     final source = input.trim();
     if (source.isEmpty) {
@@ -161,6 +162,7 @@ class MockTranslationService implements TranslationService {
     );
   }
 
+  @override
   TranslationResult santaliToHindi(String input) {
     final source = input.trim();
     if (source.isEmpty) {

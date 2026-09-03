@@ -9,13 +9,14 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const _dbName = 'eduvaani.db';
-  static const _dbVersion = 6;
+  static const _dbVersion = 7;
   static const lessonsTable = 'lessons';
   static const assessmentsTable = 'assessments';
   static const progressTable = 'progress';
   static const syncMetadataTable = 'sync_metadata';
   static const translationsTable = 'translations';
   static const benchmarkTable = 'benchmark_results';
+  static const scanHistoryTable = 'scan_history';
 
   Database? _database;
 
@@ -57,6 +58,7 @@ class DatabaseHelper {
     await _createSyncMetadataTable(db);
     await _createTranslationsTable(db);
     await _createBenchmarkTable(db);
+    await _createScanHistoryTable(db);
     await SeedData.insertSeedData(db);
   }
 
@@ -66,6 +68,7 @@ class DatabaseHelper {
     if (oldVersion < 4) await _createSyncMetadataTable(db);
     if (oldVersion < 5) await _createTranslationsTable(db);
     if (oldVersion < 6) await _createBenchmarkTable(db);
+    if (oldVersion < 7) await _createScanHistoryTable(db);
   }
 
   Future<void> _createAssessmentsTable(Database db) => db.execute('''
@@ -120,6 +123,17 @@ class DatabaseHelper {
         ttsMs INTEGER NOT NULL,
         totalMs INTEGER NOT NULL,
         recordedAt TEXT NOT NULL
+      )
+    ''');
+
+  Future<void> _createScanHistoryTable(Database db) => db.execute('''
+      CREATE TABLE $scanHistoryTable (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        image_path TEXT NOT NULL,
+        santali_text TEXT NOT NULL,
+        hindi_translation TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        is_synced INTEGER NOT NULL DEFAULT 0
       )
     ''');
 

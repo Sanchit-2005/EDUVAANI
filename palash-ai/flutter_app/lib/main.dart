@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'core/app_theme.dart';
-import 'screens/dashboard_screen.dart';
 import 'screens/splash_screen.dart';
+import 'screens/dashboard_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,8 +22,8 @@ class EduVaaniApp extends StatelessWidget {
       themeMode: ThemeMode.system,
       initialRoute: '/',
       routes: {
-        '/': (context) => const SplashScreen(),
-        '/dashboard': (context) => const DashboardScreen(),
+        '/': (_) => const SplashScreen(),
+        '/dashboard': (_) => const DashboardScreen(),
       },
     );
   }

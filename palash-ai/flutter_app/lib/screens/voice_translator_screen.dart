@@ -585,7 +585,7 @@ class _ResultCard extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                if (badge != null) badge!,
+                ?badge,
               ],
             ),
           ),
