@@ -255,6 +255,11 @@ class _FilterDropdown extends StatelessWidget {
   Widget build(BuildContext context) {
     return DropdownButtonFormField<String>(
       initialValue: value,
+      style: const TextStyle(
+        color: AppColors.textPrimary,
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+      ),
       decoration: InputDecoration(
         labelText: label,
         isDense: true,
@@ -267,11 +272,15 @@ class _FilterDropdown extends StatelessWidget {
           borderSide: const BorderSide(color: AppColors.border),
         ),
         filled: true,
-        fillColor: Colors.white,
+        fillColor: AppColors.surfaceCard,
       ),
       items: [
-        const DropdownMenuItem(value: '', child: Text('All')),
-        ...items.map((v) => DropdownMenuItem(value: v, child: Text(v))),
+        const DropdownMenuItem(
+            value: '',
+            child: Text('All', style: TextStyle(color: AppColors.textPrimary))),
+        ...items.map((v) => DropdownMenuItem(
+            value: v,
+            child: Text(v, style: const TextStyle(color: AppColors.textPrimary)))),
       ],
       onChanged: onChanged,
     );
@@ -293,7 +302,7 @@ class _LessonTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.surfaceCard,
           borderRadius: BorderRadius.circular(AppRadius.lg),
           border: Border.all(color: AppColors.border),
           boxShadow: AppShadows.sm,
@@ -320,15 +329,20 @@ class _LessonTile extends StatelessWidget {
                 children: [
                   Text(
                     lesson.topic,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.w700,
-                        ),
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     '${lesson.grade} · ${lesson.subject}',
-                    style: Theme.of(context).textTheme.bodySmall,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ],
               ),
@@ -339,7 +353,7 @@ class _LessonTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 if (lesson.isPrototypeTranslation)
-                  PillBadge(
+                  const PillBadge(
                       text: 'Prototype',
                       color: AppColors.warning),
                 const SizedBox(height: 4),

@@ -351,7 +351,7 @@ class _FeatureCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.surfaceCard,
             borderRadius: BorderRadius.circular(AppRadius.xl),
             border: Border.all(color: AppColors.border, width: 1),
             boxShadow: AppShadows.sm,

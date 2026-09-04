@@ -9,27 +9,26 @@ if sys.platform == 'win32':
     sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
     sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
 
-BASE_URL = "http://127.0.0.1:8000"
-TRANSLATE_URL = f"{BASE_URL}/translate"
-HEALTH_URL = f"{BASE_URL}/health"
+BASE_URL = "http://127.0.0.1:3000"
+TRANSLATE_URL = f"{BASE_URL}/api/translate"
+HEALTH_URL = f"{BASE_URL}/api/health"
 
 def test_health():
-    """Test health endpoint"""
+    """Test Node.js health endpoint"""
     try:
         req = urllib.request.Request(HEALTH_URL, method="GET")
         with urllib.request.urlopen(req, timeout=10) as resp:
             result = json.loads(resp.read())
-            print("Health Check:")
+            print("Node.js Health Check:")
             print(f"  Status: {result.get('status')}")
-            print(f"  Model: {result.get('model')}")
-            print(f"  Model Loaded: {result.get('model_loaded')}")
-            return result.get('model_loaded')
+            print(f"  Database: {result.get('database')}")
+            return True
     except Exception as e:
-        print(f"Health check failed: {e}")
+        print(f"Node.js health check failed: {e}")
         return False
 
 def test_translation(text, src, tgt):
-    """Test specific translation"""
+    """Test translation through Node.js backend"""
     data = {
         "text": text,
         "source_language": src,
@@ -53,18 +52,18 @@ def test_translation(text, src, tgt):
         return None
 
 if __name__ == "__main__":
-    print("Quick Translation Service Test")
-    print("=" * 40)
+    print("Complete Translation Flow Test (Flutter → Node.js → Python → IndicTrans2)")
+    print("=" * 80)
     
-    # First check health
+    # First check Node.js health
     if not test_health():
-        print("\n❌ Service is not healthy. Cannot proceed with translation tests.")
+        print("\n❌ Node.js backend is not healthy. Cannot proceed.")
         sys.exit(1)
     
-    print("\n✓ Service is healthy. Testing translations...\n")
+    print("\n✓ Node.js backend is healthy. Testing translations...\n")
     
-    # Test the specific case the user mentioned: Hindi to Santali
-    print("Test: Hindi to Santali - 'नमस्ते'")
+    # Test Hindi to Santali
+    print("Test 1: Hindi to Santali - 'नमस्ते'")
     result = test_translation("नमस्ते", "hin_Deva", "sat_Olck")
     if result and result.get("success"):
         print(f"  Input: {result['input']}")
@@ -74,7 +73,7 @@ if __name__ == "__main__":
         print(f"  ✗ Failed")
         print(f"  Response: {result}")
     
-    print("\nTest: Hindi to Santali - 'आप कैसे हैं?'")
+    print("\nTest 2: Hindi to Santali - 'आप कैसे हैं?'")
     result = test_translation("आप कैसे हैं?", "hin_Deva", "sat_Olck")
     if result and result.get("success"):
         print(f"  Input: {result['input']}")
@@ -83,3 +82,16 @@ if __name__ == "__main__":
     else:
         print(f"  ✗ Failed")
         print(f"  Response: {result}")
+    
+    print("\nTest 3: Santali to Hindi - 'ᱡᱚᱦᱟᱨ'")
+    result = test_translation("ᱡᱚᱦᱟᱨ", "sat_Olck", "hin_Deva")
+    if result and result.get("success"):
+        print(f"  Input: {result['input']}")
+        print(f"  Translation: {result['translation']}")
+        print(f"  ✓ Success")
+    else:
+        print(f"  ✗ Failed")
+        print(f"  Response: {result}")
+    
+    print("\n" + "=" * 80)
+    print("Complete flow test finished. You can now test in your Flutter app!")

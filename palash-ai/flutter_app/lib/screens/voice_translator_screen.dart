@@ -271,12 +271,21 @@ class _VoiceTranslatorScreenState extends State<VoiceTranslatorScreen>
 
                 // ── Phrase selector ─────────────────────
                 const SizedBox(height: AppSpacing.lg),
-                Text('Select demo phrase',
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
+                const Text(
+                  'Select demo phrase',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
                   'Mock ASR will return this Hindi transcript.',
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Wrap(
@@ -295,7 +304,7 @@ class _VoiceTranslatorScreenState extends State<VoiceTranslatorScreen>
                         decoration: BoxDecoration(
                           color: sel
                               ? AppColors.cardVoice
-                              : Colors.white,
+                              : AppColors.surfaceCard,
                           borderRadius:
                               BorderRadius.circular(AppRadius.full),
                           border: Border.all(
@@ -310,7 +319,7 @@ class _VoiceTranslatorScreenState extends State<VoiceTranslatorScreen>
                           style: TextStyle(
                             color: sel
                                 ? Colors.white
-                                : AppColors.textSecondary,
+                                : AppColors.textPrimary,
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                           ),
@@ -335,7 +344,11 @@ class _VoiceTranslatorScreenState extends State<VoiceTranslatorScreen>
                     ),
                     child: Text(
                       _asrResult!.transcript,
-                      style: Theme.of(context).textTheme.titleLarge,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ],
@@ -358,18 +371,38 @@ class _VoiceTranslatorScreenState extends State<VoiceTranslatorScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Hindi',
-                            style: Theme.of(context).textTheme.titleSmall),
-                        Text(_result!.source),
+                        const Text(
+                          'Hindi',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          _result!.source,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                         const SizedBox(height: AppSpacing.sm),
-                        Text('Santali',
-                            style: Theme.of(context).textTheme.titleSmall),
+                        const Text(
+                          'Santali',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         Text(
                           _result!.output,
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
-                              ?.copyWith(color: AppColors.teal),
+                          style: const TextStyle(
+                            color: AppColors.teal,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ],
                     ),
@@ -516,7 +549,7 @@ class _RecordingStatus extends StatelessWidget {
       color = AppColors.success;
     } else {
       label = 'Tap the mic to start recording';
-      color = AppColors.textHint;
+      color = AppColors.textSecondary;
     }
 
     return Text(
@@ -551,7 +584,7 @@ class _ResultCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surfaceCard,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: AppColors.border),
         boxShadow: AppShadows.sm,
@@ -563,7 +596,7 @@ class _ResultCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.md, vertical: AppSpacing.sm + 2),
             decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.06),
+              color: accentColor.withValues(alpha: 0.08),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(AppRadius.lg),
                 topRight: Radius.circular(AppRadius.lg),

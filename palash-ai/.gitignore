@@ -8,3 +8,32 @@ ml_pipeline/data/processed.jsonl
 *.tflite
 *.wav
 *.m4a
+
+# ── Python translation service ────────────────────────────────────────────────
+# Virtual environments
+ml_pipeline/translation_service/.venv/
+ml_pipeline/translation_service/venv/
+ml_pipeline/**/.venv/
+ml_pipeline/**/venv/
+
+# Compiled Python files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Hugging Face model cache (large — do not commit)
+# The model is downloaded automatically on first startup.
+# Default cache location: ~/.cache/huggingface/
+# If you set HF_HOME or TRANSFORMERS_CACHE to a project-local path,
+# add that path here too.
+.cache/huggingface/
+
+# pytest / coverage artefacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# mypy
+.mypy_cache/

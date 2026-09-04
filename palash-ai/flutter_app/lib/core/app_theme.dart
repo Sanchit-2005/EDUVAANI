@@ -1,51 +1,52 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 // ─────────────────────────────────────────────
 //  EduVaani — Design System
-//  Rich indigo × teal palette, Material 3
+//  Premium Navy × Royal Indigo × Emerald Palette
 // ─────────────────────────────────────────────
 
 class AppColors {
   AppColors._();
 
   // Brand
-  static const Color primary = Color(0xFF1E293B); // Deep Indigo
-  static const Color primaryLight = Color(0xFF475569); // Slate-600
-  static const Color primaryDark = Color(0xFF0F172A); // Slate-950
-  static const Color secondary = Color(0xFF64748B); // Slate-500
-  static const Color accent = Color(0xFFCBD5E1); // Slate-300
-  static const Color teal = Color(0xFF0F766E); // Teal-700
+  static const Color primary = Color(0xFF0F172A); // Slate-900 / Deep Navy
+  static const Color primaryLight = Color(0xFF334155); // Slate-700
+  static const Color primaryDark = Color(0xFF020617); // Slate-950
+  static const Color secondary = Color(0xFF475569); // Slate-600
+  static const Color accent = Color(0xFF6366F1); // Indigo-500
+  static const Color teal = Color(0xFF0D9488); // Teal-600
 
   // Semantics
-  static const Color success = Color(0xFF166534); // Dark green
+  static const Color success = Color(0xFF15803D); // Emerald-700
   static const Color warning = Color(0xFFB45309); // Amber-700
   static const Color error = Color(0xFFB91C1C);
   static const Color info = Color(0xFF1D4ED8);
 
   // Neutrals (light)
-  static const Color surface = Color(0xFFF8FAFC);
+  static const Color surface = Color(0xFFF8FAFC); // Porcelain Slate
   static const Color surfaceCard = Color(0xFFFFFFFF);
   static const Color border = Color(0xFFE2E8F0);
   static const Color textPrimary = Color(0xFF0F172A);
   static const Color textSecondary = Color(0xFF475569);
-  static const Color textHint = Color(0xFF64748B);
+  static const Color textHint = Color(0xFF94A3B8);
 
   // Gradient stops
-  static const Color gradStart = Color(0xFF1E293B);
-  static const Color gradMid = Color(0xFF334155);
-  static const Color gradEnd = Color(0xFF475569);
+  static const Color gradStart = Color(0xFF0F172A);
+  static const Color gradMid = Color(0xFF1E293B);
+  static const Color gradEnd = Color(0xFF334155);
 
   // Card accent colours (one per feature)
   static const Color cardLessons = Color(0xFF7C3AED);
-  static const Color cardVoice = Color(0xFF0EA5E9);
+  static const Color cardVoice = Color(0xFF0284C7);
   static const Color cardText = Color(0xFF2563EB);
-  static const Color cardWorksheet = Color(0xFF0F766E);
-  static const Color cardFlashcard = Color(0xFFEAB308);
+  static const Color cardWorksheet = Color(0xFF0D9488);
+  static const Color cardFlashcard = Color(0xD0CA8A04);
   static const Color cardAssessment = Color(0xFFDC2626);
   static const Color cardProgress = Color(0xFF16A34A);
   static const Color cardSync = Color(0xFF64748B);
-  static const Color cardScanner = Color(0xFF1E293B);
+  static const Color cardScanner = Color(0xFF0F172A);
 }
 
 // ── Gradient helpers ──────────────────────────
@@ -60,16 +61,16 @@ class AppGradients {
   );
 
   static const LinearGradient brandSubtle = LinearGradient(
-    colors: [Color(0xFFE2E8F0), Color(0xFFF8FAFC)],
+    colors: [Color(0xFFF1F5F9), Color(0xFFF8FAFC)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static LinearGradient card(Color base) => LinearGradient(
-    colors: [base.withValues(alpha: 0.12), Colors.white],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+        colors: [base, Color.lerp(base, AppColors.primaryDark, 0.25)!],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
 }
 
 // ── Shadow helpers ────────────────────────────
@@ -79,35 +80,35 @@ class AppShadows {
 
   static List<BoxShadow> sm = [
     BoxShadow(
-      color: const Color(0xFF0F172A).withValues(alpha: 0.06),
-      blurRadius: 12,
-      offset: const Offset(0, 4),
+      color: const Color(0xFF0F172A).withValues(alpha: 0.05),
+      blurRadius: 10,
+      offset: const Offset(0, 3),
     ),
   ];
 
   static List<BoxShadow> md = [
     BoxShadow(
       color: const Color(0xFF0F172A).withValues(alpha: 0.08),
-      blurRadius: 18,
-      offset: const Offset(0, 8),
+      blurRadius: 16,
+      offset: const Offset(0, 6),
     ),
   ];
 
   static List<BoxShadow> lg = [
     BoxShadow(
       color: const Color(0xFF0F172A).withValues(alpha: 0.12),
-      blurRadius: 28,
-      offset: const Offset(0, 12),
+      blurRadius: 24,
+      offset: const Offset(0, 10),
     ),
   ];
 
   static List<BoxShadow> colored(Color color) => [
-    BoxShadow(
-      color: color.withValues(alpha: 0.18),
-      blurRadius: 18,
-      offset: const Offset(0, 8),
-    ),
-  ];
+        BoxShadow(
+          color: color.withValues(alpha: 0.22),
+          blurRadius: 16,
+          offset: const Offset(0, 6),
+        ),
+      ];
 }
 
 // ── Radius tokens ─────────────────────────────
@@ -116,9 +117,9 @@ class AppRadius {
   AppRadius._();
   static const double xs = 6;
   static const double sm = 10;
-  static const double md = 12;
-  static const double lg = 16;
-  static const double xl = 20;
+  static const double md = 14;
+  static const double lg = 18;
+  static const double xl = 22;
   static const double full = 999;
 }
 
@@ -152,11 +153,20 @@ class AppTheme {
       error: AppColors.error,
     );
 
+    final baseTextTheme = GoogleFonts.plusJakartaSansTextTheme(
+      ThemeData.light().textTheme,
+    ).apply(
+      bodyColor: AppColors.textPrimary,
+      displayColor: AppColors.textPrimary,
+    );
+
+    final titleTextTheme = GoogleFonts.outfitTextTheme(baseTextTheme);
+
     return ThemeData(
       useMaterial3: true,
       colorScheme: cs,
       scaffoldBackgroundColor: AppColors.surface,
-      fontFamily: 'Roboto',
+      textTheme: titleTextTheme,
 
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.surface,
@@ -164,7 +174,7 @@ class AppTheme {
         scrolledUnderElevation: 0,
         systemOverlayStyle: SystemUiOverlayStyle.dark,
         centerTitle: false,
-        titleTextStyle: const TextStyle(
+        titleTextStyle: GoogleFonts.outfit(
           color: AppColors.textPrimary,
           fontSize: 20,
           fontWeight: FontWeight.w700,
@@ -181,6 +191,23 @@ class AppTheme {
           side: const BorderSide(color: AppColors.border, width: 1),
         ),
         margin: EdgeInsets.zero,
+      ),
+
+      dialogTheme: DialogThemeData(
+        backgroundColor: AppColors.surfaceCard,
+        elevation: 12,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.xl),
+        ),
+        titleTextStyle: GoogleFonts.outfit(
+          color: AppColors.textPrimary,
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+        ),
+        contentTextStyle: GoogleFonts.plusJakartaSans(
+          color: AppColors.textSecondary,
+          fontSize: 14,
+        ),
       ),
 
       inputDecorationTheme: InputDecorationTheme(
@@ -200,12 +227,18 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+          borderSide: const BorderSide(color: AppColors.cardText, width: 2),
         ),
-        hintStyle: const TextStyle(color: AppColors.textHint),
-        labelStyle: const TextStyle(color: AppColors.textSecondary),
-        floatingLabelStyle: const TextStyle(
-          color: AppColors.primary,
+        hintStyle: GoogleFonts.plusJakartaSans(
+          color: AppColors.textHint,
+          fontSize: 15,
+        ),
+        labelStyle: GoogleFonts.plusJakartaSans(
+          color: AppColors.textSecondary,
+          fontSize: 14,
+        ),
+        floatingLabelStyle: GoogleFonts.plusJakartaSans(
+          color: AppColors.cardText,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -218,8 +251,11 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.md),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          textStyle: GoogleFonts.outfit(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
 
@@ -227,9 +263,13 @@ class AppTheme {
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          textStyle: GoogleFonts.outfit(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -238,109 +278,9 @@ class AppTheme {
         color: AppColors.border,
         thickness: 1,
       ),
-
-      textTheme: ThemeData.light().textTheme.apply(
-        bodyColor: AppColors.textPrimary,
-        displayColor: AppColors.textPrimary,
-        fontFamily: 'Roboto',
-      ),
     );
   }
 
-  static ThemeData get dark {
-    const seed = AppColors.primary;
-
-    final cs = ColorScheme.fromSeed(
-      seedColor: seed,
-      brightness: Brightness.dark,
-      primary: AppColors.primary,
-      secondary: AppColors.secondary,
-      tertiary: AppColors.teal,
-      surface: const Color(0xFF0F172A),
-      error: AppColors.error,
-    );
-
-    return ThemeData(
-      useMaterial3: true,
-      colorScheme: cs,
-      scaffoldBackgroundColor: const Color(0xFF0F172A),
-      fontFamily: 'Roboto',
-      appBarTheme: AppBarTheme(
-        backgroundColor: const Color(0xFF0F172A),
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        systemOverlayStyle: SystemUiOverlayStyle.light,
-        centerTitle: false,
-        titleTextStyle: const TextStyle(
-          color: Colors.white,
-          fontSize: 20,
-          fontWeight: FontWeight.w700,
-          letterSpacing: -0.3,
-        ),
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      cardTheme: CardThemeData(
-        color: const Color(0xFF111827),
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          side: const BorderSide(color: Color(0xFF334155), width: 1),
-        ),
-        margin: EdgeInsets.zero,
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: const Color(0xFF1E293B),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 14,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: const BorderSide(color: Color(0xFF334155)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: const BorderSide(color: Color(0xFF334155)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
-        ),
-        hintStyle: const TextStyle(color: Color(0xFFCBD5E1)),
-        labelStyle: const TextStyle(color: Color(0xFFE2E8F0)),
-        floatingLabelStyle: const TextStyle(
-          color: AppColors.primaryLight,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-        ),
-      ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-          ),
-        ),
-      ),
-      textTheme: ThemeData.dark().textTheme.apply(
-        bodyColor: Colors.white,
-        displayColor: Colors.white,
-        fontFamily: 'Roboto',
-      ),
-    );
-  }
+  static ThemeData get dark => light;
 }
+

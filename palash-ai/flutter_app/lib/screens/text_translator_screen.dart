@@ -1,7 +1,10 @@
+import 'dart:developer' as dev;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 
+import '../core/api_config.dart';
 import '../core/app_theme.dart';
 import '../services/text_to_speech_service.dart';
 import '../services/translation_service.dart';
@@ -18,10 +21,28 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
   final _controller = TextEditingController();
   final _player = AudioPlayer();
   final TextToSpeechService _ttsService = MockTextToSpeechService();
+
   bool _hindiToSantali = true;
+
+  /// Result from the last translation (real model or phrase-tile mock).
   TranslationResult? _result;
+
+  /// True while a real API translation request is in flight.
+  /// Prevents duplicate simultaneous requests.
+  bool _isTranslating = false;
+
+  /// Persistent, retryable failure for the last ML request.
+  TranslationApiException? _translationError;
+
   bool _creatingAudio = false;
   TextToSpeechResult? _ttsResult;
+
+  // ── Language code helpers ─────────────────────────────────────────────────
+
+  String get _sourceLang => _hindiToSantali ? 'hin_Deva' : 'sat_Olck';
+  String get _targetLang => _hindiToSantali ? 'sat_Olck' : 'hin_Deva';
+
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   @override
   void dispose() {
@@ -30,15 +51,73 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
     super.dispose();
   }
 
-  void _translate() {
-    final service = TranslationService.instance;
+  // ── Translation — real IndicTrans2 model via API ───────────────────────────
+
+  Future<void> _translate() async {
+    final text = _controller.text.trim();
+
+    // Guard: empty input — do not call the backend.
+    if (text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter text to translate.')),
+      );
+      return;
+    }
+
+    // Guard: already translating — ignore duplicate taps.
+    if (_isTranslating) return;
+
     setState(() {
-      _result = _hindiToSantali
-          ? service.hindiToSantali(_controller.text)
-          : service.santaliToHindi(_controller.text);
+      _isTranslating = true;
+      _result = null;
+      _translationError = null;
       _ttsResult = null;
     });
+
+    try {
+      final result = await TranslationService.instance.translate(
+        text: text,
+        sourceLanguage: _sourceLang,
+        targetLanguage: _targetLang,
+      );
+      if (!mounted) return;
+      setState(() {
+        _result = result;
+        _translationError = null;
+      });
+    } on TranslationApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _translationError = error);
+    } catch (error, stackTrace) {
+      // Keep the UI safe while preserving the actual failure in development
+      // logs. The entered text remains mounted for retry.
+      dev.log(
+        '[TextTranslator] Unexpected translation failure',
+        name: 'TextTranslatorScreen',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!mounted) return;
+      setState(() {
+        _translationError = const TranslationApiException(
+          kind: TranslationFailureKind.response,
+          message:
+              'Translation service returned an unexpected response. Please try again.',
+        );
+      });
+    } finally {
+      if (mounted) setState(() => _isTranslating = false);
+    }
   }
+
+  // ── Phrase-tile tap — populates input and triggers real model translation ─
+
+  void _usePhrase(ClassroomPhrase phrase) {
+    _controller.text = _hindiToSantali ? phrase.hindi : phrase.santali;
+    _translate();
+  }
+
+  // ── Santali audio playback ────────────────────────────────────────────────
 
   Future<void> _playSantaliAudio() async {
     final text = _result?.output ?? '';
@@ -60,10 +139,57 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
     }
   }
 
-  void _usePhrase(ClassroomPhrase phrase) {
-    _controller.text = _hindiToSantali ? phrase.hindi : phrase.santali;
-    _translate();
+  void _showServerConfigDialog() {
+    final controller = TextEditingController(text: ApiConfig.backendBaseUrl);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Backend Server URL'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter your backend server base URL:\n'
+              '• Android Emulator: http://10.0.2.2:3000\n'
+              '• Physical Phone (Wi-Fi): http://<PC-LAN-IP>:3000\n'
+              '• USB Port Forwarding: http://127.0.0.1:3000\n'
+              '  (run: adb reverse tcp:3000 tcp:3000)',
+              style: TextStyle(fontSize: 12, color: Colors.black87),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'Server Base URL',
+                hintText: 'http://192.168.x.x:3000',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              ApiConfig.customBackendBaseUrl = null;
+              setState(() {});
+              Navigator.pop(context);
+            },
+            child: const Text('Reset Default'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              ApiConfig.customBackendBaseUrl = controller.text.trim();
+              setState(() {});
+              Navigator.pop(context);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
   }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +197,7 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
       backgroundColor: AppColors.surface,
       body: CustomScrollView(
         slivers: [
-          // ── Gradient app bar ──────────────────────────
+          // ── Gradient app bar ────────────────────────────────────────────
           SliverAppBar(
             pinned: true,
             expandedHeight: 140,
@@ -79,8 +205,9 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
             iconTheme: const IconThemeData(color: Colors.white),
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
-                decoration:
-                    BoxDecoration(gradient: AppGradients.card(AppColors.cardText)),
+                decoration: BoxDecoration(
+                  gradient: AppGradients.card(AppColors.cardText),
+                ),
                 padding: const EdgeInsets.fromLTRB(
                     AppSpacing.md, 0, AppSpacing.md, AppSpacing.lg),
                 child: Column(
@@ -94,7 +221,8 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
                           height: 40,
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(AppRadius.sm),
+                            borderRadius:
+                                BorderRadius.circular(AppRadius.sm),
                           ),
                           child: const Icon(Icons.translate_rounded,
                               color: Colors.white, size: 22),
@@ -103,9 +231,10 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
                         const Text(
                           'Text Translator',
                           style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700),
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ],
                     ),
@@ -119,39 +248,48 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
             padding: const EdgeInsets.all(AppSpacing.md),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                // Disclaimer
+
+                // ── Info banner ─────────────────────────────────────────
                 Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.md, vertical: AppSpacing.sm),
                   decoration: BoxDecoration(
-                    color: AppColors.info.withValues(alpha: 0.08),
+                    color: AppColors.cardText.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(AppRadius.md),
                     border: Border.all(
-                        color: AppColors.info.withValues(alpha: 0.2)),
+                        color: AppColors.cardText.withValues(alpha: 0.2)),
                   ),
                   child: Row(
                     children: [
                       Icon(Icons.info_outline_rounded,
-                          color: AppColors.info, size: 16),
+                          color: AppColors.cardText, size: 16),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Offline prototype dictionary. Not a live neural model.',
+                          'AI4Bharat IndicTrans2 engine (Indic-to-Indic 320M).\n'
+                          'Endpoint: ${ApiConfig.backendBaseUrl}',
                           style: TextStyle(
-                              color: AppColors.info,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500),
+                            color: AppColors.textPrimary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.settings_outlined, size: 18),
+                        color: AppColors.cardText,
+                        tooltip: 'Configure Backend IP',
+                        onPressed: _showServerConfigDialog,
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
 
-                // Direction toggle
+                // ── Direction toggle ────────────────────────────────────
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.surfaceCard,
                     borderRadius: BorderRadius.circular(AppRadius.md),
                     border: Border.all(color: AppColors.border),
                   ),
@@ -162,8 +300,9 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
                         icon: Icons.arrow_forward_rounded,
                         selected: _hindiToSantali,
                         onTap: () => setState(() {
-                          _hindiToSantali = true;
-                          _result = null;
+                           _hindiToSantali = true;
+                           _result = null;
+                           _translationError = null;
                         }),
                       ),
                       _DirectionTab(
@@ -171,8 +310,9 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
                         icon: Icons.arrow_back_rounded,
                         selected: !_hindiToSantali,
                         onTap: () => setState(() {
-                          _hindiToSantali = false;
-                          _result = null;
+                           _hindiToSantali = false;
+                           _result = null;
+                           _translationError = null;
                         }),
                       ),
                     ],
@@ -180,38 +320,72 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
                 ),
                 const SizedBox(height: AppSpacing.md),
 
-                // Input field
+                // ── Input field ─────────────────────────────────────────
                 TextField(
                   controller: _controller,
                   minLines: 3,
                   maxLines: 6,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
                   decoration: InputDecoration(
-                    labelText: _hindiToSantali ? 'Enter Hindi text' : 'Enter Santali text',
+                    labelText: _hindiToSantali
+                        ? 'Enter Hindi text'
+                        : 'Enter Santali text (Ol Chiki)',
                     alignLabelWithHint: true,
                     suffixIcon: _controller.text.isNotEmpty
                         ? IconButton(
-                            icon: const Icon(Icons.clear_rounded),
+                            icon: const Icon(Icons.clear_rounded,
+                                color: AppColors.textSecondary),
                             onPressed: () {
-                              _controller.clear();
-                              setState(() => _result = null);
+                               _controller.clear();
+                               setState(() {
+                                 _result = null;
+                                 _translationError = null;
+                               });
                             },
                           )
                         : null,
                   ),
-                  onChanged: (_) => setState(() {}),
+                   onChanged: (_) => setState(() {
+                     _translationError = null;
+                   }),
                 ),
                 const SizedBox(height: AppSpacing.md),
 
-                // Translate button
+                // ── Translate button ────────────────────────────────────
                 PrimaryButton(
-                  label: 'Translate',
+                  label: _isTranslating ? 'Translating…' : 'Translate',
                   icon: Icons.translate_rounded,
+                  loading: _isTranslating,
                   color: AppColors.cardText,
-                  onPressed: _controller.text.trim().isEmpty ? null : _translate,
+                  onPressed: (_controller.text.trim().isEmpty || _isTranslating)
+                      ? null
+                      : _translate,
                 ),
 
-                // Result card
-                if (_result != null) ...[
+                // ── Request status ──────────────────────────────────────
+                if (_isTranslating) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  const Center(
+                    child: Text(
+                      'Translating…',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ] else if (_translationError != null) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  _TranslationErrorCard(
+                    error: _translationError!,
+                    onRetry: _controller.text.trim().isEmpty ? null : _translate,
+                  ),
+                ] else if (_result != null) ...[
                   const SizedBox(height: AppSpacing.md),
                   _ResultCard(
                     result: _result!,
@@ -222,12 +396,18 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
                   ),
                 ],
 
-                // Phrase suggestions
+                // ── Classroom phrase suggestions ────────────────────────
                 const SizedBox(height: AppSpacing.lg),
                 Row(
                   children: [
-                    Text('Classroom Phrases',
-                        style: Theme.of(context).textTheme.titleMedium),
+                    const Text(
+                      'Classroom Phrases',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     const SizedBox(width: 8),
                     PillBadge(
                         text: '${TranslationService.phrases.length}',
@@ -255,7 +435,7 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
   }
 }
 
-// ── Direction tab ─────────────────────────────
+// ── Direction tab ─────────────────────────────────────────────────────────────
 
 class _DirectionTab extends StatelessWidget {
   const _DirectionTab({
@@ -285,15 +465,17 @@ class _DirectionTab extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon,
-                  size: 16,
-                  color: selected ? Colors.white : AppColors.textSecondary),
+              Icon(
+                icon,
+                size: 16,
+                color: selected ? Colors.white : AppColors.textSecondary,
+              ),
               const SizedBox(width: 6),
               Text(
                 label,
                 style: TextStyle(
                   fontSize: 13,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
                   color: selected ? Colors.white : AppColors.textSecondary,
                 ),
               ),
@@ -305,7 +487,92 @@ class _DirectionTab extends StatelessWidget {
   }
 }
 
-// ── Result card ───────────────────────────────
+// ── Translation error card ─────────────────────────────────────────────────────
+
+class _TranslationErrorCard extends StatelessWidget {
+  const _TranslationErrorCard({
+    required this.error,
+    required this.onRetry,
+  });
+
+  final TranslationApiException error;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final isModelError = error.isModelError;
+    final title = isModelError
+        ? 'IndicTrans2 model error'
+        : error.isUnavailable
+            ? 'Translation service unavailable'
+            : 'Translation response error';
+    return Semantics(
+      liveRegion: true,
+      container: true,
+      label: error.message,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.error.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.error_outline_rounded,
+              color: AppColors.error,
+              size: 22,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: AppColors.error,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    error.message,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 13,
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: onRetry,
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text('Retry'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.error,
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(0, 40),
+                        tapTargetSize: MaterialTapTargetSize.padded,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Result card ───────────────────────────────────────────────────────────────
 
 class _ResultCard extends StatelessWidget {
   const _ResultCard({
@@ -324,18 +591,25 @@ class _ResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isReal = !result.isPrototype;
+    final String chipLabel = isReal
+        ? 'IndicTrans2'
+        : (result.matchedPhrase ? 'Phrase match' : 'Prototype / partial');
+    final ChipStyle chipStyle = isReal
+        ? ChipStyle.success
+        : (result.matchedPhrase ? ChipStyle.success : ChipStyle.warning);
+    final IconData chipIcon = isReal
+        ? Icons.auto_awesome_rounded
+        : (result.matchedPhrase
+            ? Icons.check_circle_rounded
+            : Icons.warning_amber_rounded);
+
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppColors.cardText.withValues(alpha: 0.06),
-            AppColors.teal.withValues(alpha: 0.04),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: AppColors.surfaceCard,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.cardText.withValues(alpha: 0.2)),
+        border: Border.all(color: AppColors.cardText.withValues(alpha: 0.25)),
+        boxShadow: AppShadows.sm,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -347,11 +621,9 @@ class _ResultCard extends StatelessWidget {
             child: Row(
               children: [
                 StatusChip(
-                  label: result.matchedPhrase ? 'Phrase match' : 'Prototype / partial',
-                  style: result.matchedPhrase ? ChipStyle.success : ChipStyle.warning,
-                  icon: result.matchedPhrase
-                      ? Icons.check_circle_rounded
-                      : Icons.warning_amber_rounded,
+                  label: chipLabel,
+                  style: chipStyle,
+                  icon: chipIcon,
                 ),
                 const Spacer(),
                 IconButton(
@@ -361,9 +633,11 @@ class _ResultCard extends StatelessWidget {
                   onPressed: result.output.isEmpty
                       ? null
                       : () {
-                          Clipboard.setData(ClipboardData(text: result.output));
+                          Clipboard.setData(
+                              ClipboardData(text: result.output));
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Copied to clipboard')),
+                            const SnackBar(
+                                content: Text('Copied to clipboard')),
                           );
                         },
                 ),
@@ -371,18 +645,20 @@ class _ResultCard extends StatelessWidget {
             ),
           ),
 
-          // Translation output
+          // Translation output with explicit dark charcoal text
           Padding(
-            padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.md),
+            padding: const EdgeInsets.fromLTRB(AppSpacing.md,
+                AppSpacing.sm, AppSpacing.md, AppSpacing.md),
             child: SelectableText(
               result.output.isEmpty ? '—' : result.output,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: result.output.isEmpty
-                        ? AppColors.textHint
-                        : AppColors.textPrimary,
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: TextStyle(
+                color: result.output.isEmpty
+                    ? AppColors.textHint
+                    : AppColors.textPrimary,
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                height: 1.3,
+              ),
             ),
           ),
 
@@ -390,11 +666,16 @@ class _ResultCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(
                   AppSpacing.md, 0, AppSpacing.md, AppSpacing.sm),
-              child: Text(result.note!,
-                  style: Theme.of(context).textTheme.bodySmall),
+              child: Text(
+                result.note!,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
             ),
 
-          // Audio button
+          // Audio button (Santali output only)
           if (hindiToSantali) ...[
             const Divider(height: 1),
             Padding(
@@ -408,7 +689,8 @@ class _ResultCard extends StatelessWidget {
                           ? const SizedBox(
                               width: 16,
                               height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2),
                             )
                           : const Icon(Icons.volume_up_rounded, size: 18),
                       label: Text(creatingAudio
@@ -417,14 +699,16 @@ class _ResultCard extends StatelessWidget {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.teal,
                         side: BorderSide(
-                            color: AppColors.teal.withValues(alpha: 0.4)),
+                            color:
+                                AppColors.teal.withValues(alpha: 0.4)),
                       ),
                     ),
                   ),
                   if (ttsResult != null) ...[
                     const SizedBox(width: 10),
                     StatusChip(
-                      label: '${ttsResult!.duration.inMilliseconds} ms',
+                      label:
+                          '${ttsResult!.duration.inMilliseconds} ms',
                       style: ChipStyle.info,
                       icon: Icons.timer_rounded,
                     ),
@@ -439,7 +723,7 @@ class _ResultCard extends StatelessWidget {
   }
 }
 
-// ── Phrase tile ───────────────────────────────
+// ── Phrase tile ───────────────────────────────────────────────────────────────
 
 class _PhraseTile extends StatelessWidget {
   const _PhraseTile({
@@ -460,9 +744,10 @@ class _PhraseTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.surfaceCard,
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(color: AppColors.border),
+          boxShadow: AppShadows.sm,
         ),
         child: Row(
           children: [
@@ -472,18 +757,25 @@ class _PhraseTile extends StatelessWidget {
                 children: [
                   Text(
                     hindiToSantali ? phrase.hindi : phrase.santali,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 2),
-                  Text(phrase.englishHint,
-                      style: Theme.of(context).textTheme.bodySmall),
+                  Text(
+                    phrase.englishHint,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
                 ],
               ),
             ),
-            Icon(Icons.north_west_rounded,
-                size: 16, color: AppColors.textHint),
+            const Icon(Icons.north_west_rounded,
+                size: 16, color: AppColors.cardText),
           ],
         ),
       ),

@@ -2,10 +2,12 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'audio_cache_service.dart';
+
 class TextToSpeechResult {
   const TextToSpeechResult({
     required this.audioPath,
@@ -27,6 +29,7 @@ abstract class TextToSpeechService {
 ///
 /// Produces a small local WAV cue so that recording, synthesis, caching and
 /// playback can be demonstrated without claiming Santali speech quality.
+/// On web (Chrome) the file-IO path is skipped and a stub is returned.
 class MockTextToSpeechService implements TextToSpeechService {
   MockTextToSpeechService({AudioCacheService? cache})
       : _cache = cache ?? AudioCacheService();
@@ -38,6 +41,16 @@ class MockTextToSpeechService implements TextToSpeechService {
     final stopwatch = Stopwatch()..start();
     if (text.trim().isEmpty) {
       throw ArgumentError.value(text, 'text', 'Santali text cannot be empty.');
+    }
+
+    // Web (Chrome) does not support dart:io or path_provider — return stub.
+    if (kIsWeb) {
+      stopwatch.stop();
+      return TextToSpeechResult(
+        audioPath: '',
+        duration: stopwatch.elapsed,
+        isMock: true,
+      );
     }
 
     final directory = await getTemporaryDirectory();
@@ -56,8 +69,7 @@ class MockTextToSpeechService implements TextToSpeechService {
     );
   }
 
-  /// Creates a valid local audio cue. It is deliberately not represented as
-  /// spoken Santali; a real model will replace this adapter in a later phase.
+  /// Creates a valid local audio cue (not real Santali speech — demo only).
   Uint8List _createDemoWav(String text) {
     const sampleRate = 16000;
     final seconds = (0.45 + text.runes.length * 0.012).clamp(0.45, 1.6);
@@ -67,7 +79,7 @@ class MockTextToSpeechService implements TextToSpeechService {
     bytes.setUint32(0, 0x52494646, Endian.big); // RIFF
     bytes.setUint32(4, 36 + dataBytes, Endian.little);
     bytes.setUint32(8, 0x57415645, Endian.big); // WAVE
-    bytes.setUint32(12, 0x666d7420, Endian.big); // fmt 
+    bytes.setUint32(12, 0x666d7420, Endian.big); // fmt
     bytes.setUint32(16, 16, Endian.little);
     bytes.setUint16(20, 1, Endian.little);
     bytes.setUint16(22, 1, Endian.little);

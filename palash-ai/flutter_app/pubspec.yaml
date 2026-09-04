@@ -44,6 +44,10 @@ dependencies:
   path_provider: ^2.1.6
   sqflite_common_ffi: ^2.3.6
 
+  # HTTP client — used by ApiTranslationService to call the Node.js backend
+  http: ^1.4.0
+  google_fonts: ^6.2.1
+
   # Image Scanner & Processing
   camera: ^0.10.6
   image_picker: ^1.1.0

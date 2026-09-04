@@ -20,7 +20,20 @@ class OnDeviceTranslationService implements TranslationService {
   OnDeviceTranslationService({ModelManager? manager}) : _manager = manager ?? ModelManager();
   final ModelManager _manager;
 
-  Future<void> ensureModelReady() async => _manager.requireModel(ModelManager.hindiSantaliTranslation);
+  Future<void> ensureModelReady() async =>
+      _manager.requireModel(ModelManager.hindiSantaliTranslation);
+
+  @override
+  Future<TranslationResult> translate({
+    required String text,
+    required String sourceLanguage,
+    required String targetLanguage,
+  }) async {
+    await ensureModelReady();
+    throw UnsupportedError(
+      'Hindi ↔ Santali ONNX inference is not bundled in this prototype.',
+    );
+  }
 
   @override
   TranslationResult hindiToSantali(String input) => throw UnsupportedError(

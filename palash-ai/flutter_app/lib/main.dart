@@ -18,8 +18,8 @@ class EduVaaniApp extends StatelessWidget {
       title: 'EduVaani',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.system,
+      darkTheme: AppTheme.light,
+      themeMode: ThemeMode.light,
       initialRoute: '/',
       routes: {
         '/': (_) => const SplashScreen(),

@@ -44,6 +44,11 @@ SUPPORTED_PAIRS = {
 NUM_BEAMS = 5
 MAX_INPUT_TOKENS = 256
 MAX_OUTPUT_TOKENS = 256
+EARLY_STOPPING = True
+MIN_LENGTH = 1
+LENGTH_PENALTY = 1.0
+DO_SAMPLE = False
+REPETITION_PENALTY = 1.2
 
 
 # ── Translator class ──────────────────────────────────────────────────────────
@@ -189,6 +194,11 @@ class IndicTransTranslator:
                 num_beams=NUM_BEAMS,
                 num_return_sequences=1,
                 max_length=MAX_OUTPUT_TOKENS,
+                early_stopping=EARLY_STOPPING,
+                min_length=MIN_LENGTH,
+                length_penalty=LENGTH_PENALTY,
+                do_sample=DO_SAMPLE,
+                repetition_penalty=REPETITION_PENALTY,
             )
 
         # Step 4 — Decode token IDs back to text

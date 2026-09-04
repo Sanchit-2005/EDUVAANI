@@ -1,0 +1,40 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Python Translation Service",
+      "type": "shell",
+      "command": "python",
+      "args": ["app.py"],
+      "options": {
+        "cwd": "${workspaceFolder}/ml_pipeline/translation_service"
+      },
+      "group": "build",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Start Node.js Backend",
+      "type": "shell",
+      "command": "npm",
+      "args": ["start"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "group": "build",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Start All Translation Services",
+      "dependsOn": [
+        "Start Python Translation Service",
+        "Start Node.js Backend"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
+}
