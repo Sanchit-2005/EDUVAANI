@@ -37,3 +37,13 @@ htmlcov/
 
 # mypy
 .mypy_cache/
+
+
+# Python translation service logs
+palash-ai/ml_pipeline/translation_service/pyservice.log
+
+
+
+
+
+*.log
