@@ -1,3 +1,10 @@
+import 'dart:async';
+import 'dart:developer' as dev;
+
+import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/services.dart';
+
+import '../core/api_config.dart';
 import '../services/speech_recognition_service.dart';
 import '../services/text_to_speech_service.dart';
 import '../services/translation_service.dart';
@@ -20,6 +27,8 @@ class OnDeviceTranslationService implements TranslationService {
   OnDeviceTranslationService({ModelManager? manager}) : _manager = manager ?? ModelManager();
   final ModelManager _manager;
 
+  static const MethodChannel _channel = MethodChannel('eduvaani/on_device_translation');
+
   Future<void> ensureModelReady() async =>
       _manager.requireModel(ModelManager.hindiSantaliTranslation);
 
@@ -29,21 +38,88 @@ class OnDeviceTranslationService implements TranslationService {
     required String sourceLanguage,
     required String targetLanguage,
   }) async {
-    await ensureModelReady();
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) {
+      throw const TranslationApiException(
+        kind: TranslationFailureKind.request,
+        message: 'Please enter text to translate.',
+      );
+    }
+
+    try {
+      final result = await _channel.invokeMethod<Map<dynamic, dynamic>>(
+        'translate',
+        {
+          'text': trimmed,
+          'source_lang': sourceLanguage,
+          'target_lang': targetLanguage,
+        },
+      );
+
+      if (result == null) {
+        throw const TranslationApiException(
+          kind: TranslationFailureKind.response,
+          message: 'On-device translation returned an empty response.',
+        );
+      }
+
+      final success = result['success'] as bool? ?? false;
+      if (!success) {
+        throw TranslationApiException(
+          kind: TranslationFailureKind.model,
+          message: 'On-device translation failed.',
+          technicalMessage: result['error']?.toString(),
+        );
+      }
+
+      final translation = result['translation'] as String? ?? '';
+      if (translation.trim().isEmpty) {
+        throw const TranslationApiException(
+          kind: TranslationFailureKind.response,
+          message: 'On-device translation returned an empty result.',
+        );
+      }
+
+      return TranslationResult(
+        source: trimmed,
+        output: translation,
+        isPrototype: false,
+        matchedPhrase: false,
+      );
+    } on PlatformException catch (error) {
+      _debugLog('[OnDeviceTranslationService] PlatformException: ${error.code} - ${error.message}');
+      throw TranslationApiException(
+        kind: TranslationFailureKind.unavailable,
+        message: 'On-device translation is not available: ${error.message}',
+        technicalMessage: error.details?.toString(),
+      );
+    } catch (error) {
+      _debugLog('[OnDeviceTranslationService] Unexpected error: $error');
+      throw TranslationApiException(
+        kind: TranslationFailureKind.model,
+        message: 'On-device translation failed unexpectedly.',
+        technicalMessage: error.toString(),
+      );
+    }
+  }
+
+  @override
+  TranslationResult hindiToSantali(String input) {
     throw UnsupportedError(
-      'Hindi ↔ Santali ONNX inference is not bundled in this prototype.',
+      'On-device hindiToSantali synchronous fallback is not supported. Use translate() instead.',
     );
   }
 
   @override
-  TranslationResult hindiToSantali(String input) => throw UnsupportedError(
-    'Hindi to Santali ONNX inference is not bundled in this prototype.',
-  );
+  TranslationResult santaliToHindi(String input) {
+    throw UnsupportedError(
+      'On-device santaliToHindi synchronous fallback is not supported. Use translate() instead.',
+    );
+  }
 
-  @override
-  TranslationResult santaliToHindi(String input) => throw UnsupportedError(
-    'Santali to Hindi ONNX inference is not bundled in this prototype.',
-  );
+  void _debugLog(String message) {
+    if (kDebugMode) dev.log(message, name: 'OnDeviceTranslationService');
+  }
 }
 
 class OnDeviceTTSService implements TextToSpeechService {

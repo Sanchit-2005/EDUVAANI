@@ -6,6 +6,7 @@ import 'package:just_audio/just_audio.dart';
 
 import '../core/api_config.dart';
 import '../core/app_theme.dart';
+import '../ml/on_device_services.dart';
 import '../services/text_to_speech_service.dart';
 import '../services/translation_service.dart';
 import '../widgets/app_widgets.dart';
@@ -36,6 +37,8 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
 
   bool _creatingAudio = false;
   TextToSpeechResult? _ttsResult;
+
+  bool _useOnDevice = true;
 
   // ── Language code helpers ─────────────────────────────────────────────────
 
@@ -75,11 +78,20 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
     });
 
     try {
-      final result = await TranslationService.instance.translate(
-        text: text,
-        sourceLanguage: _sourceLang,
-        targetLanguage: _targetLang,
-      );
+      final TranslationResult result;
+      if (_useOnDevice) {
+        result = await OnDeviceTranslationService().translate(
+          text: text,
+          sourceLanguage: _sourceLang,
+          targetLanguage: _targetLang,
+        );
+      } else {
+        result = await TranslationService.instance.translate(
+          text: text,
+          sourceLanguage: _sourceLang,
+          targetLanguage: _targetLang,
+        );
+      }
       if (!mounted) return;
       setState(() {
         _result = result;
@@ -266,8 +278,10 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'AI4Bharat IndicTrans2 engine (Indic-to-Indic 320M).\n'
-                          'Endpoint: ${ApiConfig.backendBaseUrl}',
+                          _useOnDevice
+                              ? 'On-device translation\nRuns locally on this device'
+                              : 'AI4Bharat IndicTrans2 engine (Indic-to-Indic 320M).\n'
+                                'Endpoint: ${ApiConfig.backendBaseUrl}',
                           style: TextStyle(
                             color: AppColors.textPrimary,
                             fontSize: 12,
@@ -278,8 +292,12 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
                       IconButton(
                         icon: const Icon(Icons.settings_outlined, size: 18),
                         color: AppColors.cardText,
-                        tooltip: 'Configure Backend IP',
-                        onPressed: _showServerConfigDialog,
+                        tooltip: _useOnDevice ? 'Switch to online mode' : 'Configure Backend IP',
+                        onPressed: () {
+                          setState(() {
+                            _useOnDevice = !_useOnDevice;
+                          });
+                        },
                       ),
                     ],
                   ),
