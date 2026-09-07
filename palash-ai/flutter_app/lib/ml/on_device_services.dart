@@ -47,6 +47,14 @@ class OnDeviceTranslationService implements TranslationService {
     }
 
     try {
+      // First, try to initialize the engine explicitly
+      try {
+        final initResult = await _channel.invokeMethod('initialize');
+        _debugLog('[OnDeviceTranslationService] Initialize result: $initResult');
+      } catch (e, stack) {
+        _debugLog('[OnDeviceTranslationService] Initialize error: $e, stack: $stack');
+      }
+
       final result = await _channel.invokeMethod<Map<dynamic, dynamic>>(
         'translate',
         {
@@ -88,13 +96,14 @@ class OnDeviceTranslationService implements TranslationService {
       );
     } on PlatformException catch (error) {
       _debugLog('[OnDeviceTranslationService] PlatformException: ${error.code} - ${error.message}');
+      _debugLog('[OnDeviceTranslationService] PlatformException details: ${error.details}');
       throw TranslationApiException(
         kind: TranslationFailureKind.unavailable,
         message: 'On-device translation is not available: ${error.message}',
         technicalMessage: error.details?.toString(),
       );
-    } catch (error) {
-      _debugLog('[OnDeviceTranslationService] Unexpected error: $error');
+    } catch (error, stack) {
+      _debugLog('[OnDeviceTranslationService] Unexpected error: $error, stack: $stack');
       throw TranslationApiException(
         kind: TranslationFailureKind.model,
         message: 'On-device translation failed unexpectedly.',

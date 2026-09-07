@@ -34,6 +34,7 @@ class SentencePieceTokenizer(private val context: Context) {
 
     fun loadModel(assetPath: String): Boolean {
         return try {
+            Log.d(TAG, "Loading model from asset: $assetPath")
             loadModelProtobuf(assetPath)
             true
         } catch (e: Exception) {
@@ -44,6 +45,7 @@ class SentencePieceTokenizer(private val context: Context) {
 
     fun loadVocab(assetPath: String): Boolean {
         return try {
+            Log.d(TAG, "Loading vocab from asset: $assetPath")
             context.assets.open(assetPath).use { input ->
                 val json = JSONObject(input.readBytes().toString(Charsets.UTF_8))
                 val keys = json.keys()
@@ -67,6 +69,7 @@ class SentencePieceTokenizer(private val context: Context) {
 
     fun loadTargetVocab(assetPath: String): Boolean {
         return try {
+            Log.d(TAG, "Loading target vocab from asset: $assetPath")
             context.assets.open(assetPath).use { input ->
                 val json = JSONObject(input.readBytes().toString(Charsets.UTF_8))
                 val keys = json.keys()
@@ -210,52 +213,66 @@ class SentencePieceTokenizer(private val context: Context) {
 
     @Throws(IOException::class)
     private fun loadModelProtobuf(assetPath: String) {
+        Log.d(TAG, "Starting to load protobuf model from: $assetPath")
         context.assets.open(assetPath).use { input ->
             val data = input.readBytes()
+            Log.d(TAG, "Loaded ${data.size} bytes from $assetPath")
             val buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
 
+            var position = 0
             while (buffer.hasRemaining()) {
-                val tag = readVarint(buffer)
-                val fieldNumber = (tag ushr 3).toInt()
-                val wireType = (tag and 0x7).toInt()
+                position = buffer.position()
+                Log.d(TAG, "Processing protobuf field at position: $position")
+                
+                try {
+                    val tag = readVarint(buffer)
+                    val fieldNumber = (tag ushr 3).toInt()
+                    val wireType = (tag and 0x7).toInt()
 
-                when (fieldNumber) {
-                    1 -> { // repeated SentencePiece
-                        val pieceData = readLengthDelimited(buffer)
-                        val piece = parseSentencePiece(pieceData)
-                        val id = spmPieceToId.size
-                        spmPieceToId[piece.first] = id
-                        spmIdToPiece[id] = piece.first
-                        spmScores[id] = piece.second
-                        addToTrie(piece.first, id, piece.second)
+                    Log.d(TAG, "Parsed tag: $tag, fieldNumber: $fieldNumber, wireType: $wireType")
+                    
+                    when (fieldNumber) {
+                        1 -> { // repeated SentencePiece
+                            val pieceData = readLengthDelimited(buffer)
+                            val piece = parseSentencePiece(pieceData)
+                            val id = spmPieceToId.size
+                            spmPieceToId[piece.first] = id
+                            spmIdToPiece[id] = piece.first
+                            spmScores[id] = piece.second
+                            addToTrie(piece.first, id, piece.second)
+                        }
+                        2 -> { // trainer_spec
+                            Log.d(TAG, "Skipping trainer_spec field")
+                            skipField(buffer, wireType)
+                        }
+                        3 -> { // normalizer_spec
+                            Log.d(TAG, "Skipping normalizer_spec field")
+                            skipField(buffer, wireType)
+                        }
+                        5 -> { // unk_id
+                            unkId = readVarint(buffer).toInt()
+                            Log.d(TAG, "Set unkId to: $unkId")
+                        }
+                        6 -> { // bos_id
+                            bosId = readVarint(buffer).toInt()
+                            Log.d(TAG, "Set bosId to: $bosId")
+                        }
+                        7 -> { // eos_id
+                            eosId = readVarint(buffer).toInt()
+                            Log.d(TAG, "Set eosId to: $eosId")
+                        }
+                        8 -> { // pad_id
+                            padId = readVarint(buffer).toInt()
+                            Log.d(TAG, "Set padId to: $padId")
+                        }
+                        else -> {
+                            Log.d(TAG, "Skipping unknown field number: $fieldNumber with wireType: $wireType")
+                            skipField(buffer, wireType)
+                        }
                     }
-                    2 -> { // version
-                        val version = readVarint(buffer).toInt()
-                        Log.d(TAG, "Model version: $version")
-                    }
-                    5 -> { // unk_id
-                        unkId = readVarint(buffer).toInt()
-                    }
-                    6 -> { // bos_id
-                        bosId = readVarint(buffer).toInt()
-                    }
-                    7 -> { // eos_id
-                        eosId = readVarint(buffer).toInt()
-                    }
-                    8 -> { // pad_id
-                        padId = readVarint(buffer).toInt()
-                    }
-                    9 -> { // user_defined_symbols
-                        val length = readVarint(buffer).toInt()
-                        val bytes = ByteArray(length)
-                        buffer.get(bytes)
-                    }
-                    10 -> { // normalization_rule_byte_escape
-                        val length = readVarint(buffer).toInt()
-                        val bytes = ByteArray(length)
-                        buffer.get(bytes)
-                    }
-                    else -> skipField(buffer, wireType)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error processing protobuf field at position $position: ${e.message}", e)
+                    throw e
                 }
             }
 
@@ -283,7 +300,7 @@ class SentencePieceTokenizer(private val context: Context) {
                     score = buffer.float
                 }
                 3 -> { // type
-                    readVarint(buffer)
+                    readVarint(buffer) // Skip type field
                 }
                 else -> skipField(buffer, wireType)
             }
@@ -321,15 +338,52 @@ class SentencePieceTokenizer(private val context: Context) {
     }
 
     private fun skipField(buffer: ByteBuffer, wireType: Int) {
+        Log.d(TAG, "Skipping field with wireType: $wireType")
         when (wireType) {
-            0 -> readVarint(buffer)
-            1 -> buffer.position(buffer.position() + 8)
-            2 -> {
-                val length = readVarint(buffer).toInt()
-                buffer.position(buffer.position() + length)
+            0 -> { // VARINT
+                readVarint(buffer)
             }
-            5 -> buffer.position(buffer.position() + 4)
-            else -> throw IOException("Unknown wire type: $wireType")
+            1 -> { // 64BIT
+                val remaining = buffer.remaining()
+                if (remaining >= 8) {
+                    buffer.position(buffer.position() + 8)
+                } else {
+                    buffer.position(buffer.limit())
+                }
+            }
+            2 -> { // LENGTH_DELIMITED
+                val length = readVarint(buffer).toInt()
+                val remaining = buffer.remaining()
+                if (length > remaining) {
+                    buffer.position(buffer.limit())
+                } else {
+                    buffer.position(buffer.position() + length)
+                }
+            }
+            3 -> { // START_GROUP (deprecated, not supported)
+                Log.w(TAG, "Encountered deprecated START_GROUP wire type")
+                // This is deprecated and shouldn't occur in modern protobufs
+                // We'll treat it as an error case
+                throw IOException("START_GROUP wire type encountered - not supported")
+            }
+            4 -> { // END_GROUP (deprecated, not supported)
+                Log.w(TAG, "Encountered END_GROUP wire type, treating as no-op")
+                // This is deprecated and shouldn't occur in modern protobufs
+                // This should mark the end of a group, but we don't expect groups
+                // So we just treat it as a no-op to handle malformed protobufs
+            }
+            5 -> { // 32BIT
+                val remaining = buffer.remaining()
+                if (remaining >= 4) {
+                    buffer.position(buffer.position() + 4)
+                } else {
+                    buffer.position(buffer.limit())
+                }
+            }
+            else -> {
+                Log.e(TAG, "Unknown wire type: $wireType")
+                throw IOException("Unknown wire type: $wireType")
+            }
         }
     }
 
