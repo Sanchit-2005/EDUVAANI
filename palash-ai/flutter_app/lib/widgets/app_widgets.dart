@@ -87,6 +87,51 @@ class EduVaaniAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
+// ── Compact device status action ──────────────
+
+class DeviceStatusAction extends StatelessWidget {
+  const DeviceStatusAction({
+    super.key,
+    required this.onDevice,
+    this.onPressed,
+  });
+
+  final bool onDevice;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = onDevice
+        ? 'On-device mode. Tap to switch to server mode.'
+        : 'Server mode. Tap to switch to on-device mode.';
+    final color = onDevice ? AppColors.success : AppColors.info;
+
+    return Semantics(
+      button: onPressed != null,
+      label: label,
+      child: IconButton(
+        onPressed: onPressed,
+        tooltip: label,
+        icon: Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.28),
+                blurRadius: 5,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ── Feature header (screen hero) ─────────────
 
 class FeatureHeader extends StatelessWidget {

@@ -40,6 +40,10 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
 
   bool _useOnDevice = true;
 
+  /// ID of the classroom phrase currently reflected in the input field.
+  /// Keys the input so a new selection can never blend with stale state.
+  String? _selectedPhraseId;
+
   // ── Language code helpers ─────────────────────────────────────────────────
 
   String get _sourceLang => _hindiToSantali ? 'hin_Deva' : 'sat_Olck';
@@ -125,7 +129,18 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
   // ── Phrase-tile tap — populates input and triggers real model translation ─
 
   void _usePhrase(ClassroomPhrase phrase) {
-    _controller.text = _hindiToSantali ? phrase.hindi : phrase.santali;
+    final text = _hindiToSantali ? phrase.hindi : phrase.santali;
+    // Replace atomically: collapsed selection + empty composing range so no
+    // stale glyphs or IME composing underline can linger under the new text.
+    setState(() {
+      _selectedPhraseId = phrase.id;
+      _controller.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+        composing: TextRange.empty,
+      );
+      _translationError = null;
+    });
     _translate();
   }
 
@@ -215,6 +230,12 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
             expandedHeight: 140,
             backgroundColor: AppColors.cardText,
             iconTheme: const IconThemeData(color: Colors.white),
+            actions: [
+              DeviceStatusAction(
+                onDevice: _useOnDevice,
+                onPressed: () => setState(() => _useOnDevice = !_useOnDevice),
+              ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 decoration: BoxDecoration(
@@ -261,49 +282,6 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
             sliver: SliverList(
               delegate: SliverChildListDelegate([
 
-                // ── Info banner ─────────────────────────────────────────
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    color: AppColors.cardText.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                    border: Border.all(
-                        color: AppColors.cardText.withValues(alpha: 0.2)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline_rounded,
-                          color: AppColors.cardText, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _useOnDevice
-                              ? 'On-device translation\nRuns locally on this device'
-                              : 'AI4Bharat IndicTrans2 engine (Indic-to-Indic 320M).\n'
-                                'Endpoint: ${ApiConfig.backendBaseUrl}',
-                          style: TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.settings_outlined, size: 18),
-                        color: AppColors.cardText,
-                        tooltip: _useOnDevice ? 'Switch to online mode' : 'Configure Backend IP',
-                        onPressed: () {
-                          setState(() {
-                            _useOnDevice = !_useOnDevice;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-
                 // ── Direction toggle ────────────────────────────────────
                 Container(
                   decoration: BoxDecoration(
@@ -321,6 +299,8 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
                            _hindiToSantali = true;
                            _result = null;
                            _translationError = null;
+                           _selectedPhraseId = null;
+                           _controller.clear();
                         }),
                       ),
                       _DirectionTab(
@@ -331,6 +311,8 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
                            _hindiToSantali = false;
                            _result = null;
                            _translationError = null;
+                           _selectedPhraseId = null;
+                           _controller.clear();
                         }),
                       ),
                     ],
@@ -340,6 +322,8 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
 
                 // ── Input field ─────────────────────────────────────────
                 TextField(
+                  key: ValueKey(
+                      'translator-input-$_hindiToSantali-${_selectedPhraseId ?? 'none'}'),
                   controller: _controller,
                   minLines: 3,
                   maxLines: 6,
@@ -437,13 +421,16 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
                   (phrase) => Padding(
                     padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                     child: _PhraseTile(
+                      key: ValueKey(phrase.id),
                       phrase: phrase,
                       hindiToSantali: _hindiToSantali,
                       onTap: () => _usePhrase(phrase),
                     ),
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xl),
+                SizedBox(
+                    height:
+                        AppSpacing.xl + MediaQuery.paddingOf(context).bottom),
               ]),
             ),
           ),
@@ -745,6 +732,7 @@ class _ResultCard extends StatelessWidget {
 
 class _PhraseTile extends StatelessWidget {
   const _PhraseTile({
+    super.key,
     required this.phrase,
     required this.hindiToSantali,
     required this.onTap,

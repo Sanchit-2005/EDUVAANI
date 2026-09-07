@@ -160,18 +160,21 @@ class DashboardScreen extends StatelessWidget {
 
           // ── Feature grid ──────────────────────────────
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(
+            padding: EdgeInsets.fromLTRB(
               AppSpacing.md,
               0,
               AppSpacing.md,
-              AppSpacing.xl,
+              AppSpacing.xl + MediaQuery.paddingOf(context).bottom,
             ),
-            sliver: SliverGrid.count(
-              crossAxisCount: 2,
-              mainAxisSpacing: AppSpacing.md,
-              crossAxisSpacing: AppSpacing.md,
-              childAspectRatio: 1.05,
-              children: [
+            sliver: SliverGrid(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount:
+                    MediaQuery.sizeOf(context).width >= 360 ? 3 : 2,
+                mainAxisSpacing: AppSpacing.sm,
+                crossAxisSpacing: AppSpacing.sm,
+                mainAxisExtent: 118,
+              ),
+              delegate: SliverChildListDelegate([
                 _FeatureCard(
                   icon: Icons.menu_book_rounded,
                   title: 'Lessons',
@@ -235,7 +238,7 @@ class DashboardScreen extends StatelessWidget {
                   color: AppColors.cardScanner,
                   onTap: () => _open(context, const SantaliScannerScreen()),
                 ),
-              ],
+              ]),
             ),
           ),
         ],
@@ -349,7 +352,7 @@ class _FeatureCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.xl),
         child: Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: AppColors.surfaceCard,
             borderRadius: BorderRadius.circular(AppRadius.xl),
@@ -358,28 +361,33 @@ class _FeatureCard extends StatelessWidget {
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
-                child: Icon(icon, color: color, size: 22),
+                child: Icon(icon, color: color, size: 20),
               ),
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: 8),
               Text(
                 title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: AppColors.textPrimary,
-                  fontSize: 15,
+                  fontSize: 14,
                   fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 11,

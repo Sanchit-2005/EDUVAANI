@@ -33,11 +33,13 @@ class TranslationResult {
 
 class ClassroomPhrase {
   const ClassroomPhrase({
+    required this.id,
     required this.hindi,
     required this.santali,
     required this.englishHint,
   });
 
+  final String id;
   final String hindi;
   final String santali;
   final String englishHint;
@@ -324,51 +326,61 @@ class MockTranslationService implements TranslationService {
 
   static const List<ClassroomPhrase> phrases = [
     ClassroomPhrase(
+      id: 'count-objects',
       hindi: 'बच्चों को दस वस्तुएँ दें और उन्हें एक-एक करके गिनने के लिए कहें।',
       santali: 'ᱜᱤᱫᱽᱨᱟᱹ ᱠᱚ ᱜᱮᱞ ᱜᱚᱴᱟᱝ ᱡᱤᱱᱤᱥ ᱮᱢᱟ ᱠᱚᱢ ᱟᱨ ᱢᱤᱫ-ᱢᱤᱫ ᱛᱮ ᱞᱮᱠᱷᱟ ᱪᱚ ᱠᱚᱢ᱾',
       englishHint: 'Give ten objects and ask children to count one by one.',
     ),
     ClassroomPhrase(
+      id: 'open-book',
       hindi: 'बच्चों को अपनी किताब खोलने के लिए कहें।',
       santali: 'ᱜᱤᱫᱽᱨᱟᱹ ᱠᱚ ᱟᱠᱚᱣᱟᱜ ᱯᱚᱛᱚᱵ ᱠᱷᱩᱞᱟᱹᱣ ᱞᱟᱹᱜᱤᱫ ᱢᱮᱛᱟ ᱠᱚᱢ᱾',
       englishHint: 'Ask children to open their book.',
     ),
     ClassroomPhrase(
+      id: 'ask-addition',
       hindi: 'दो और दो कितने होते हैं, बच्चों से पूछें।',
       santali: 'ᱵᱟᱨ ᱟᱨ ᱵᱟᱨ ᱛᱤᱱᱟᱹᱜ ᱦᱩᱭᱩᱜᱼᱟ, ᱜᱤᱫᱽᱨᱟᱹ ᱠᱚ ᱠᱩᱞᱤ ᱠᱚᱢ᱾',
       englishHint: 'Ask children how much is two and two.',
     ),
     ClassroomPhrase(
+      id: 'repeat-sentence',
       hindi: 'एक वाक्य बोलें और बच्चों से दोहराने को कहें।',
       santali: 'ᱢᱤᱫ ᱟᱹᱭᱠᱟᱹᱣ ᱢᱮ ᱟᱨ ᱜᱤᱫᱽᱨᱟᱹ ᱠᱚ ᱫᱩᱦᱲᱟᱹ ᱞᱟᱹᱜᱤᱫ ᱢᱮᱛᱟ ᱠᱚᱢ᱾',
       englishHint: 'Say a sentence and ask children to repeat.',
     ),
     ClassroomPhrase(
+      id: 'sit-quietly',
       hindi: 'शांत बैठो।',
       santali: 'ᱥᱟᱱᱛᱤ ᱛᱮ ᱫᱩᱲᱩᱵ ᱯᱮ᱾',
       englishHint: 'Sit quietly.',
     ),
     ClassroomPhrase(
+      id: 'listen-carefully',
       hindi: 'कृपया ध्यान से सुनो।',
       santali: 'ᱫᱟᱭᱟᱠᱟᱛᱮ ᱜᱚᱨ ᱥᱟᱶ ᱟᱸᱡᱚᱢ ᱯᱮ᱾',
       englishHint: 'Please listen carefully.',
     ),
     ClassroomPhrase(
+      id: 'open-notebook',
       hindi: 'अपनी कॉपी खोलो।',
       santali: 'ᱟᱢᱟᱜ ᱠᱚᱯᱤ ᱠᱷᱩᱞᱟᱹᱣ ᱯᱮ᱾',
       englishHint: 'Open your notebook.',
     ),
     ClassroomPhrase(
+      id: 'how-many',
       hindi: 'यह कितने हैं?',
       santali: 'ᱱᱚᱣᱟ ᱛᱤᱱᱟᱹᱜ ᱢᱮᱱᱟᱜᱼᱟ?',
       englishHint: 'How many are these?',
     ),
     ClassroomPhrase(
+      id: 'very-good',
       hindi: 'बहुत अच्छा।',
       santali: 'ᱟᱹᱰᱤ ᱵᱟᱹᱲᱤᱡᱽ᱾',
       englishHint: 'Very good.',
     ),
     ClassroomPhrase(
+      id: 'count-together',
       hindi: 'अब मिलकर गिनो।',
       santali: 'ᱱᱤᱛᱚᱜ ᱢᱤᱫ ᱥᱟᱶᱛᱮ ᱞᱮᱠᱷᱟ ᱯᱮ᱾',
       englishHint: 'Now count together.',

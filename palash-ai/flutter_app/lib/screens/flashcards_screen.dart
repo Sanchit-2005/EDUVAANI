@@ -174,12 +174,22 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
                 const SizedBox(height: AppSpacing.sm),
                 SizedBox(
                   height: 80,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: 10,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(width: AppSpacing.sm),
-                    itemBuilder: (_, i) => _MiniCard(number: i + 1),
+                  child: ShaderMask(
+                    shaderCallback: (bounds) => const LinearGradient(
+                      begin: Alignment.centerRight,
+                      end: Alignment.centerLeft,
+                      colors: [Colors.transparent, Colors.black],
+                      stops: [0.0, 0.12],
+                    ).createShader(bounds),
+                    blendMode: BlendMode.dstIn,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.only(right: AppSpacing.lg),
+                      itemCount: 10,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(width: AppSpacing.sm),
+                      itemBuilder: (_, i) => _MiniCard(number: i + 1),
+                    ),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
@@ -255,7 +265,9 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
                     ],
                   ),
                 ],
-                const SizedBox(height: AppSpacing.xl),
+                SizedBox(
+                    height:
+                        AppSpacing.xl + MediaQuery.paddingOf(context).bottom),
               ]),
             ),
           ),

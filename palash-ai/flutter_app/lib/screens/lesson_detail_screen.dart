@@ -75,8 +75,11 @@ class LessonDetailScreen extends StatelessWidget {
 
           // ── Content sections ──────────────────────────
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.xl),
+            padding: EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.md,
+                AppSpacing.md,
+                AppSpacing.xl + MediaQuery.paddingOf(context).bottom),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 _ContentSection(

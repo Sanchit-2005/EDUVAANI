@@ -17,7 +17,7 @@ class SeedData {
       learningOutcome: 'Child can count objects from 1 to 10.',
       hindiInstruction: 'बच्चों को दस वस्तुएँ दें और उन्हें एक-एक करके गिनने के लिए कहें।',
       santaliTranslation:
-          '[Prototype Santali Translation] ᱜᱤᱫᱽᱨᱟᱹ ᱠᱚ ᱜᱮᱞ ᱜᱚᱴᱟᱝ ᱡᱤᱱᱤᱥ ᱮᱢᱟ ᱠᱚᱢ ᱟᱨ ᱢᱤᱫ-ᱢᱤᱫ ᱛᱮ ᱞᱮᱠᱷᱟ ᱪᱚ ᱠᱚᱢ᱾',
+          'ᱜᱤᱫᱽᱨᱟᱹ ᱠᱚ ᱜᱮᱞ ᱜᱚᱴᱟᱝ ᱡᱤᱱᱤᱥ ᱮᱢᱟ ᱠᱚᱢ ᱟᱨ ᱢᱤᱫ-ᱢᱤᱫ ᱛᱮ ᱞᱮᱠᱷᱟ ᱪᱚ ᱠᱚᱢ᱾',
       isPrototypeTranslation: true,
     ),
     Lesson(
@@ -27,7 +27,7 @@ class SeedData {
       learningOutcome: 'Child can recognize and pronounce letters.',
       hindiInstruction: 'बच्चों को अपनी किताब खोलने के लिए कहें।',
       santaliTranslation:
-          '[Prototype Santali Translation] ᱜᱤᱫᱽᱨᱟᱹ ᱠᱚ ᱟᱠᱚᱣᱟᱜ ᱯᱚᱛᱚᱵ ᱠᱷᱩᱞᱟᱹᱣ ᱞᱟᱹᱜᱤᱫ ᱢᱮᱛᱟ ᱠᱚᱢ᱾',
+          'ᱜᱤᱫᱽᱨᱟᱹ ᱠᱚ ᱟᱠᱚᱣᱟᱜ ᱯᱚᱛᱚᱵ ᱠᱷᱩᱞᱟᱹᱣ ᱞᱟᱜᱤᱫ ᱢᱮᱛᱟ ᱠᱚᱢ᱾',
       isPrototypeTranslation: true,
     ),
     Lesson(
@@ -37,7 +37,7 @@ class SeedData {
       learningOutcome: 'Child can add numbers up to 5.',
       hindiInstruction: 'दो और दो कितने होते हैं, बच्चों से पूछें।',
       santaliTranslation:
-          '[Prototype Santali Translation] ᱵᱟᱨ ᱟᱨ ᱵᱟᱨ ᱛᱤᱱᱟᱹᱜ ᱦᱩᱭᱩᱜᱼᱟ, ᱜᱤᱫᱽᱨᱟᱹ ᱠᱚ ᱠᱩᱞᱤ ᱠᱚᱢ᱾',
+          'ᱵᱟᱨ ᱟᱨ ᱵᱟᱨ ᱛᱤᱱᱟᱹᱜ ᱦᱩᱭᱩᱜᱼᱟ, ᱜᱤᱫᱽᱨᱟᱹ ᱠᱚ ᱠᱩᱞᱤ ᱠᱚᱢ᱾',
       isPrototypeTranslation: true,
     ),
     Lesson(
@@ -47,7 +47,7 @@ class SeedData {
       learningOutcome: 'Child can listen and repeat a short sentence.',
       hindiInstruction: 'एक वाक्य बोलें और बच्चों से दोहराने को कहें।',
       santaliTranslation:
-          '[Prototype Santali Translation] ᱢᱤᱫ ᱟᱹᱭᱠᱟᱹᱣ ᱢᱮ ᱟᱨ ᱜᱤᱫᱽᱨᱟᱹ ᱠᱚ ᱫᱩᱦᱲᱟᱹ ᱞᱟᱹᱜᱤᱫ ᱢᱮᱛᱟ ᱠᱚᱢ᱾',
+          'ᱢᱤᱫ ᱟᱹᱭᱠᱟᱹᱣ ᱢᱮ ᱟᱨ ᱜᱤᱫᱽᱨᱟᱹ ᱠᱚ ᱫᱩᱦᱲᱟᱹ ᱞᱟᱜᱤᱫ ᱢᱮᱛᱟ ᱠᱚᱢ᱾',
       isPrototypeTranslation: true,
     ),
     Lesson(
@@ -57,7 +57,7 @@ class SeedData {
       learningOutcome: 'Child can identify tens and ones.',
       hindiInstruction: 'दस और एक की जगह समझाने के लिए मोतियों का उपयोग करें।',
       santaliTranslation:
-          '[Prototype Santali Translation] ᱜᱮᱞ ᱟᱨ ᱢᱤᱫ ᱡᱟᱭᱜᱟ ᱵᱩᱡᱷᱟᱹᱣ ᱞᱟᱹᱜᱤᱫ ᱢᱚᱱᱤ ᱵᱮᱵᱷᱟᱨ ᱢᱮ᱾',
+          'ᱜᱮᱞ ᱟᱨ ᱢᱤᱫ ᱡᱟᱭᱜᱟ ᱵᱩᱡᱷᱟᱹᱣ ᱞᱟᱜᱤᱫ ᱢᱚᱱᱤ ᱵᱮᱵᱷᱟᱨ ᱢᱮ᱾',
       isPrototypeTranslation: true,
     ),
     Lesson(
@@ -67,7 +67,7 @@ class SeedData {
       learningOutcome: 'Child can read two-letter words.',
       hindiInstruction: 'बोर्ड पर सरल शब्द लिखें और बच्चों से पढ़ने को कहें।',
       santaliTranslation:
-          '[Prototype Santali Translation] ᱵᱚᱨᱰ ᱨᱮ ᱟᱞᱜᱟ ᱟᱹᱲᱟᱹ ᱚᱞ ᱢᱮ ᱟᱨ ᱜᱤᱫᱽᱨᱟᱹ ᱠᱚ ᱯᱟᱲᱦᱟᱣ ᱞᱟᱹᱜᱤᱫ ᱢᱮᱛᱟ ᱠᱚᱢ᱾',
+          'ᱵᱚᱨᱰ ᱨᱮ ᱟᱞᱜᱟ ᱟᱹᱲᱟᱹ ᱚᱞ ᱢᱮ ᱟᱨ ᱜᱤᱫᱽᱨᱟᱹ ᱠᱚ ᱯᱟᱲᱦᱟᱣ ᱞᱟᱜᱤᱫ ᱢᱮᱛᱟ ᱠᱚᱢ᱾',
       isPrototypeTranslation: true,
     ),
   ];

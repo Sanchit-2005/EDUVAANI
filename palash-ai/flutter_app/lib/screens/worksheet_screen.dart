@@ -60,6 +60,9 @@ class _WorksheetScreenState extends State<WorksheetScreen> {
             expandedHeight: 140,
             backgroundColor: AppColors.cardWorksheet,
             iconTheme: const IconThemeData(color: Colors.white),
+            actions: const [
+              DeviceStatusAction(onDevice: true),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 decoration: BoxDecoration(
@@ -102,33 +105,6 @@ class _WorksheetScreenState extends State<WorksheetScreen> {
             padding: const EdgeInsets.all(AppSpacing.md),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                // Offline badge
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    color: AppColors.success.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                    border: Border.all(
-                        color: AppColors.success.withValues(alpha: 0.25)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.offline_bolt_rounded,
-                          color: AppColors.success, size: 16),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Created entirely on this device. No internet required.',
-                        style: TextStyle(
-                            color: AppColors.success,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-
                 // Parameters label
                 Text('Worksheet Parameters',
                     style: Theme.of(context).textTheme.titleMedium),
@@ -224,7 +200,9 @@ class _WorksheetScreenState extends State<WorksheetScreen> {
                     ],
                   ),
                 ],
-                const SizedBox(height: AppSpacing.xl),
+                SizedBox(
+                    height:
+                        AppSpacing.xl + MediaQuery.paddingOf(context).bottom),
               ]),
             ),
           ),

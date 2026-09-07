@@ -1,4 +1,6 @@
 class Lesson {
+  static const prototypeSantaliMarker = '[Prototype Santali Translation]';
+
   final int? id;
   final String grade;
   final String subject;
@@ -19,6 +21,17 @@ class Lesson {
     this.isPrototypeTranslation = false,
   });
 
+  /// Removes internal prototype markers before content reaches a teacher.
+  static String? sanitizeSantaliTranslation(String? value) {
+    if (value == null) return null;
+
+    final sanitized = value
+        .replaceAll(prototypeSantaliMarker, '')
+        .replaceAll(RegExp(r'\\s+'), ' ')
+        .trim();
+    return sanitized.isEmpty ? null : sanitized;
+  }
+
   Map<String, dynamic> toMap() {
     return {
       if (id != null) 'id': id,
@@ -27,7 +40,7 @@ class Lesson {
       'topic': topic,
       'learningOutcome': learningOutcome,
       'hindiInstruction': hindiInstruction,
-      'santaliTranslation': santaliTranslation,
+      'santaliTranslation': sanitizeSantaliTranslation(santaliTranslation),
       'isPrototypeTranslation': isPrototypeTranslation ? 1 : 0,
     };
   }
@@ -40,7 +53,7 @@ class Lesson {
       topic: map['topic'],
       learningOutcome: map['learningOutcome'],
       hindiInstruction: map['hindiInstruction'],
-      santaliTranslation: map['santaliTranslation'],
+      santaliTranslation: sanitizeSantaliTranslation(map['santaliTranslation']),
       isPrototypeTranslation: map['isPrototypeTranslation'] == 1,
     );
   }

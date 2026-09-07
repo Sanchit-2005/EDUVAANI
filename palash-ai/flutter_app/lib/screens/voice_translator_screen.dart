@@ -294,6 +294,7 @@ class _VoiceTranslatorScreenState extends State<VoiceTranslatorScreen>
                   children: TranslationService.phrases.map((phrase) {
                     final sel = _selectedPhrase.hindi == phrase.hindi;
                     return GestureDetector(
+                      key: ValueKey(phrase.id),
                       onTap: _recording || _busy
                           ? null
                           : () => setState(() => _selectedPhrase = phrase),
@@ -431,7 +432,9 @@ class _VoiceTranslatorScreenState extends State<VoiceTranslatorScreen>
                   ),
                 ],
 
-                const SizedBox(height: AppSpacing.xl),
+                SizedBox(
+                    height:
+                        AppSpacing.xl + MediaQuery.paddingOf(context).bottom),
               ]),
             ),
           ),

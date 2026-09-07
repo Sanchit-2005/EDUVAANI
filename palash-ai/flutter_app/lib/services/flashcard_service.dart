@@ -47,21 +47,28 @@ class FlashcardService {
     return document.save();
   }
 
-  pw.Widget _card(Flashcard card) => pw.Container(
-    margin: const pw.EdgeInsets.all(8),
-    padding: const pw.EdgeInsets.all(14),
-    decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.blue)),
-    child: pw.Column(
-      mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
-      crossAxisAlignment: pw.CrossAxisAlignment.center,
-      children: [
-        pw.Text('${card.number}', style: pw.TextStyle(fontSize: 54, fontWeight: pw.FontWeight.bold)),
-        pw.Text('Hindi: ${card.hindiWord}'),
-        pw.Text('Santali: ${card.santaliWord}'),
-        pw.Text(List.filled(card.number, '●').join(' '), style: const pw.TextStyle(fontSize: 15)),
-      ],
-    ),
-  );
+  /// Sentinel for numbers not yet reviewed by a native Santali speaker.
+  /// Never printed verbatim — omitted so a teacher can't read it aloud.
+  static const _pendingSantaliLabel = '[Prototype Santali]';
+
+  pw.Widget _card(Flashcard card) {
+    final hasValidatedSantali = card.santaliWord != _pendingSantaliLabel;
+    return pw.Container(
+      margin: const pw.EdgeInsets.all(8),
+      padding: const pw.EdgeInsets.all(14),
+      decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.blue)),
+      child: pw.Column(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        children: [
+          pw.Text('${card.number}', style: pw.TextStyle(fontSize: 54, fontWeight: pw.FontWeight.bold)),
+          pw.Text('Hindi: ${card.hindiWord}'),
+          if (hasValidatedSantali) pw.Text('Santali: ${card.santaliWord}'),
+          pw.Text(List.filled(card.number, '●').join(' '), style: const pw.TextStyle(fontSize: 15)),
+        ],
+      ),
+    );
+  }
 
   Iterable<List<T>> _chunks<T>(List<T> values, int size) sync* {
     for (var index = 0; index < values.length; index += size) {

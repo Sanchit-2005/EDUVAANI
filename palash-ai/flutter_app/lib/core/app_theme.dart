@@ -30,7 +30,8 @@ class AppColors {
   static const Color border = Color(0xFFE2E8F0);
   static const Color textPrimary = Color(0xFF0F172A);
   static const Color textSecondary = Color(0xFF475569);
-  static const Color textHint = Color(0xFF94A3B8);
+  // AA-safe muted text for visible subtitles on white and off-white surfaces.
+  static const Color textHint = Color(0xFF64748B);
 
   // Gradient stops
   static const Color gradStart = Color(0xFF0F172A);
