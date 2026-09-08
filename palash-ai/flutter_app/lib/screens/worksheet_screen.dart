@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 import '../core/app_theme.dart';
 import '../services/translation_service.dart';
 import '../services/worksheet_service.dart';
+import 'custom_assignment_screen.dart';
 import '../widgets/app_widgets.dart';
 
 class WorksheetScreen extends StatefulWidget {
@@ -19,6 +20,7 @@ class _WorksheetScreenState extends State<WorksheetScreen> {
   final WorksheetService _worksheetService = WorksheetService();
   Uint8List? _pdf;
   bool _creating = false;
+  bool _highContrast = false;
 
   Future<void> _generate() async {
     setState(() => _creating = true);
@@ -34,6 +36,7 @@ class _WorksheetScreenState extends State<WorksheetScreen> {
           hindiInstruction: hindi,
           santaliInstruction: santali,
         ),
+        highContrast: _highContrast,
       );
       if (!mounted) return;
       setState(() => _pdf = pdf);
@@ -131,6 +134,51 @@ class _WorksheetScreenState extends State<WorksheetScreen> {
                         value: 'Hindi + Santali'),
                   ],
                 ),
+                const SizedBox(height: AppSpacing.md),
+
+                // High-contrast / low-ink toggle
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    border: Border.all(color: AppColors.border),
+                    boxShadow: AppShadows.sm,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.contrast_rounded,
+                          size: 20, color: AppColors.cardWorksheet),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Print-friendly mode',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textPrimary)),
+                            Text('Low-ink, high-contrast for printing',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.textHint)),
+                          ],
+                        ),
+                      ),
+                      Switch(
+                        value: _highContrast,
+                        activeTrackColor: AppColors.cardWorksheet,
+                        onChanged: (v) {
+                          setState(() => _highContrast = v);
+                          // Regenerate if a PDF already exists.
+                          if (_pdf != null && !_creating) _generate();
+                        },
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: AppSpacing.lg),
 
                 // Generate button
@@ -140,6 +188,21 @@ class _WorksheetScreenState extends State<WorksheetScreen> {
                   color: AppColors.cardWorksheet,
                   loading: _creating,
                   onPressed: _creating ? null : _generate,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+
+                // Navigate to custom assignment
+                SecondaryButton(
+                  label: 'Create Custom Assignment',
+                  icon: Icons.edit_note_rounded,
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const CustomAssignmentScreen(),
+                      ),
+                    );
+                  },
                 ),
 
                 // PDF preview section

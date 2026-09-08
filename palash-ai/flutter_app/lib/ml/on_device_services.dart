@@ -78,14 +78,9 @@ class OnDeviceTranslationService implements TranslationService {
     }
 
     try {
-      // First, try to initialize the engine explicitly
-      try {
-        final initResult = await _channel.invokeMethod('initialize');
-        _debugLog('[OnDeviceTranslationService] Initialize result: $initResult');
-      } catch (e, stack) {
-        _debugLog('[OnDeviceTranslationService] Initialize error: $e, stack: $stack');
-      }
-
+      // The native translate handler initializes the engine itself (idempotent).
+      // Do NOT call 'initialize' separately here — it adds an extra blocking
+      // round-trip for every request and was the main cause of UI freezes.
       final result = await _channel.invokeMethod<Map<dynamic, dynamic>>(
         'translate',
         {

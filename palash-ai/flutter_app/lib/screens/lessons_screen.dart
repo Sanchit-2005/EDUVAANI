@@ -19,6 +19,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
   List<String> _grades = [];
   List<String> _subjects = [];
   List<Lesson> _lessons = [];
+  Set<int> _completedLessonIds = {};
   bool _loading = true;
   String? _error;
 
@@ -41,11 +42,13 @@ class _LessonsScreenState extends State<LessonsScreen> {
         grade: _grade.isEmpty ? null : _grade,
         subject: _subject.isEmpty ? null : _subject,
       );
+      final completedLessonIds = await db.getCompletedLessonIds();
       if (!mounted) return;
       setState(() {
         _grades = grades;
         _subjects = subjects;
         _lessons = lessons;
+        _completedLessonIds = completedLessonIds;
         _loading = false;
       });
     } catch (_) {
@@ -55,6 +58,19 @@ class _LessonsScreenState extends State<LessonsScreen> {
         _loading = false;
       });
     }
+  }
+
+  Future<void> _toggleCompletion(Lesson lesson) async {
+    if (lesson.id == null) return;
+    final completed = await DatabaseHelper.instance.toggleLessonCompletion(lesson.id!);
+    if (!mounted) return;
+    setState(() {
+      if (completed) {
+        _completedLessonIds.add(lesson.id!);
+      } else {
+        _completedLessonIds.remove(lesson.id!);
+      }
+    });
   }
 
   @override
@@ -154,22 +170,44 @@ class _LessonsScreenState extends State<LessonsScreen> {
       );
     }
 
-    return ListView.separated(
+    final sequences = <String, List<Lesson>>{};
+    for (final lesson in _lessons) {
+      final key = '${lesson.grade}|${lesson.subject}';
+      sequences.putIfAbsent(key, () => []).add(lesson);
+    }
+
+    return ListView(
       padding: const EdgeInsets.fromLTRB(
           AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.xl),
-      itemCount: _lessons.length,
-      separatorBuilder: (context, index) => const SizedBox(height: AppSpacing.sm),
-      itemBuilder: (context, i) {
-        final lesson = _lessons[i];
-        return _LessonTile(
-          lesson: lesson,
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => LessonDetailScreen(lesson: lesson),
-            ),
+      children: [
+        for (final sequence in sequences.values) ...[
+          _SubjectSequenceHeader(
+            grade: sequence.first.grade,
+            subject: sequence.first.subject,
+            lessonCount: sequence.length,
+            color: sequence.first.subjectColor,
           ),
-        );
-      },
+          const SizedBox(height: AppSpacing.sm),
+          for (final lesson in sequence) ...[
+            _LessonTile(
+              lesson: lesson,
+              step: lesson.sequenceNumber,
+              totalSteps: sequence.length,
+              isComplete: lesson.id != null && _completedLessonIds.contains(lesson.id),
+              onCompletionChanged: () => _toggleCompletion(lesson),
+              onTap: () => Navigator.of(context)
+                  .push(
+                    MaterialPageRoute(
+                      builder: (_) => LessonDetailScreen(lesson: lesson),
+                    ),
+                  )
+                  .then((_) => _load()),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          const SizedBox(height: AppSpacing.md),
+        ],
+      ],
     );
   }
 }
@@ -194,9 +232,9 @@ class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
   final ValueChanged<String?> onSubjectChanged;
 
   @override
-  double get minExtent => 72;
+  double get minExtent => 128;
   @override
-  double get maxExtent => 72;
+  double get maxExtent => 128;
 
   @override
   bool shouldRebuild(_FilterHeaderDelegate old) =>
@@ -208,31 +246,42 @@ class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
   @override
   Widget build(
       BuildContext context, double shrinkOffset, bool overlapsContent) {
+    final gradeFilter = _FilterDropdown(
+      label: 'Grade',
+      value: selectedGrade,
+      items: grades,
+      onChanged: onGradeChanged,
+    );
+    final subjectFilter = _FilterDropdown(
+      label: 'Subject',
+      value: selectedSubject,
+      items: subjects,
+      onChanged: onSubjectChanged,
+    );
+
     return Container(
-      height: 72,
       color: AppColors.surface,
       padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-      child: Row(
-        children: [
-          Expanded(
-            child: _FilterDropdown(
-              label: 'Grade',
-              value: selectedGrade,
-              items: grades,
-              onChanged: onGradeChanged,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: _FilterDropdown(
-              label: 'Subject',
-              value: selectedSubject,
-              items: subjects,
-              onChanged: onSubjectChanged,
-            ),
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 480) {
+            return Column(
+              children: [
+                gradeFilter,
+                const SizedBox(height: AppSpacing.sm),
+                subjectFilter,
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: gradeFilter),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(child: subjectFilter),
+            ],
+          );
+        },
       ),
     );
   }
@@ -287,11 +336,69 @@ class _FilterDropdown extends StatelessWidget {
   }
 }
 
+class _SubjectSequenceHeader extends StatelessWidget {
+  const _SubjectSequenceHeader({
+    required this.grade,
+    required this.subject,
+    required this.lessonCount,
+    required this.color,
+  });
+
+  final String grade;
+  final String subject;
+  final int lessonCount;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 32,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(AppRadius.full),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(subject,
+                  style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary)),
+              Text('$grade · $lessonCount-step sequence',
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textHint)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 // ── Lesson tile ───────────────────────────────
 
 class _LessonTile extends StatelessWidget {
-  const _LessonTile({required this.lesson, required this.onTap});
+  const _LessonTile({
+    required this.lesson,
+    required this.step,
+    required this.totalSteps,
+    required this.isComplete,
+    required this.onCompletionChanged,
+    required this.onTap,
+  });
+
   final Lesson lesson;
+  final int step;
+  final int totalSteps;
+  final bool isComplete;
+  final VoidCallback onCompletionChanged;
   final VoidCallback onTap;
 
   @override
@@ -314,11 +421,11 @@ class _LessonTile extends StatelessWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: AppColors.cardLessons.withValues(alpha: 0.1),
+                color: lesson.subjectColor.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(AppRadius.md),
               ),
-              child: const Icon(Icons.menu_book_rounded,
-                  color: AppColors.cardLessons, size: 24),
+              child: Icon(lesson.topicIcon,
+                  color: lesson.subjectColor, size: 24),
             ),
             const SizedBox(width: AppSpacing.md),
 
@@ -337,7 +444,16 @@ class _LessonTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${lesson.grade} · ${lesson.subject}',
+                    'Step $step of $totalSteps · ${lesson.durationLabel}',
+                    style: TextStyle(
+                      color: lesson.subjectColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    lesson.grade,
                     style: const TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 12,
@@ -348,15 +464,20 @@ class _LessonTile extends StatelessWidget {
               ),
             ),
 
-            // Badge + chevron
+            // Completion control + chevron
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                if (lesson.isPrototypeTranslation)
-                  const PillBadge(
-                      text: 'Prototype',
-                      color: AppColors.warning),
-                const SizedBox(height: 4),
+                IconButton(
+                  onPressed: onCompletionChanged,
+                  tooltip: isComplete ? 'Mark as not taught' : 'Mark as taught',
+                  icon: Icon(
+                    isComplete
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    color: isComplete ? AppColors.success : AppColors.textHint,
+                  ),
+                ),
                 const Icon(Icons.chevron_right_rounded,
                     color: AppColors.textHint, size: 20),
               ],

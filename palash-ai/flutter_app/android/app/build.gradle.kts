@@ -51,6 +51,7 @@ kotlin {
 dependencies {
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.3")
     implementation("com.google.protobuf:protobuf-javalite:3.25.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
 
 flutter {

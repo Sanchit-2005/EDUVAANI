@@ -78,6 +78,26 @@ flutter:
 
   assets:
     - assets/models/
+    # Script fonts are declared both here and under `fonts:` below: this
+    # section makes the raw TTF bytes loadable via rootBundle for the PDF
+    # engine, while `fonts:` registers the families for on-screen widgets.
+    - assets/fonts/
+
+  fonts:
+    # Santali (Ol Chiki script, U+1C50-U+1C7F). Without this the app UI and
+    # generated PDFs render Ol Chiki text as tofu boxes on devices that have
+    # no system Ol Chiki font.
+    - family: NotoSansOlChiki
+      fonts:
+        - asset: assets/fonts/NotoSansOlChiki-Regular.ttf
+        - asset: assets/fonts/NotoSansOlChiki-Bold.ttf
+          weight: 700
+    # Hindi (Devanagari script) for PDF + UI use.
+    - family: NotoSansDevanagari
+      fonts:
+        - asset: assets/fonts/NotoSansDevanagari-Regular.ttf
+        - asset: assets/fonts/NotoSansDevanagari-Bold.ttf
+          weight: 700
 
   # To add assets to your application, add an assets section, like this:
   # assets:

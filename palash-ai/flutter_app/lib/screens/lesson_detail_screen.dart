@@ -2,13 +2,48 @@ import 'package:flutter/material.dart';
 
 import '../core/app_theme.dart';
 import '../models/lesson.dart';
+import '../services/lesson_audio_service.dart';
 import '../widgets/app_widgets.dart';
 import 'worksheet_screen.dart';
 
-class LessonDetailScreen extends StatelessWidget {
+class LessonDetailScreen extends StatefulWidget {
   const LessonDetailScreen({super.key, required this.lesson});
 
   final Lesson lesson;
+
+  @override
+  State<LessonDetailScreen> createState() => _LessonDetailScreenState();
+}
+
+class _LessonDetailScreenState extends State<LessonDetailScreen> {
+  final LessonAudioService _audio = LessonAudioService();
+  String? _playingLanguage;
+
+  Lesson get lesson => widget.lesson;
+
+  @override
+  void dispose() {
+    _audio.dispose();
+    super.dispose();
+  }
+
+  Future<void> _playInstruction(String language, String text) async {
+    setState(() => _playingLanguage = language);
+    try {
+      if (language == 'Hindi') {
+        await _audio.playHindiInstruction(text);
+      } else {
+        await _audio.playSantaliInstruction(text);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Audio preview is unavailable on this device.')),
+      );
+    } finally {
+      if (mounted) setState(() => _playingLanguage = null);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +130,12 @@ class LessonDetailScreen extends StatelessWidget {
                   color: AppColors.cardVoice,
                   content: lesson.hindiInstruction,
                 ),
+                const SizedBox(height: AppSpacing.sm),
+                _LessonAudioButton(
+                  label: 'Listen in Hindi',
+                  playing: _playingLanguage == 'Hindi',
+                  onPressed: () => _playInstruction('Hindi', lesson.hindiInstruction),
+                ),
                 const SizedBox(height: AppSpacing.md),
                 _ContentSection(
                   icon: Icons.translate_rounded,
@@ -103,6 +144,20 @@ class LessonDetailScreen extends StatelessWidget {
                   content: lesson.santaliTranslation ?? 'Not available yet.',
                   muted: lesson.santaliTranslation == null,
                 ),
+                if (lesson.santaliTranslation != null) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  _LessonAudioButton(
+                    label: 'Listen in Santali',
+                    playing: _playingLanguage == 'Santali',
+                    onPressed: () => _playInstruction(
+                        'Santali', lesson.santaliTranslation!),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Audio preview only — use a verified recording or voice model before class.',
+                    style: TextStyle(fontSize: 11, color: AppColors.textHint),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.lg),
 
                 // ── CTA button ────────────────────────
@@ -118,6 +173,34 @@ class LessonDetailScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _LessonAudioButton extends StatelessWidget {
+  const _LessonAudioButton({
+    required this.label,
+    required this.playing,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool playing;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: OutlinedButton.icon(
+        onPressed: playing ? null : onPressed,
+        icon: Icon(playing ? Icons.graphic_eq_rounded : Icons.volume_up_rounded),
+        label: Text(playing ? 'Preparing audio…' : label),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.cardVoice,
+          side: const BorderSide(color: AppColors.cardVoice),
+        ),
       ),
     );
   }

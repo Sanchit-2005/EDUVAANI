@@ -1,6 +1,7 @@
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
+import '../models/custom_assignment.dart';
 import '../models/lesson.dart';
 import 'seed_data.dart';
 
@@ -9,7 +10,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const _dbName = 'eduvaani.db';
-  static const _dbVersion = 7;
+  static const _dbVersion = 10;
   static const lessonsTable = 'lessons';
   static const assessmentsTable = 'assessments';
   static const progressTable = 'progress';
@@ -17,6 +18,8 @@ class DatabaseHelper {
   static const translationsTable = 'translations';
   static const benchmarkTable = 'benchmark_results';
   static const scanHistoryTable = 'scan_history';
+  static const customAssignmentsTable = 'custom_assignments';
+  static const lessonCompletionsTable = 'lesson_completions';
 
   Database? _database;
 
@@ -50,7 +53,10 @@ class DatabaseHelper {
         learningOutcome TEXT NOT NULL,
         hindiInstruction TEXT NOT NULL,
         santaliTranslation TEXT,
-        isPrototypeTranslation INTEGER NOT NULL DEFAULT 0
+        isPrototypeTranslation INTEGER NOT NULL DEFAULT 0,
+        sequenceNumber INTEGER NOT NULL DEFAULT 1,
+        durationMinutes INTEGER NOT NULL DEFAULT 20,
+        santaliQualityStatus TEXT NOT NULL DEFAULT 'unverified'
       )
     ''');
     await _createAssessmentsTable(db);
@@ -59,6 +65,8 @@ class DatabaseHelper {
     await _createTranslationsTable(db);
     await _createBenchmarkTable(db);
     await _createScanHistoryTable(db);
+    await _createCustomAssignmentsTable(db);
+    await _createLessonCompletionsTable(db);
     await SeedData.insertSeedData(db);
   }
 
@@ -69,6 +77,20 @@ class DatabaseHelper {
     if (oldVersion < 5) await _createTranslationsTable(db);
     if (oldVersion < 6) await _createBenchmarkTable(db);
     if (oldVersion < 7) await _createScanHistoryTable(db);
+    if (oldVersion < 8) await _createCustomAssignmentsTable(db);
+    if (oldVersion < 9) {
+      await db.execute(
+        'ALTER TABLE $lessonsTable ADD COLUMN sequenceNumber INTEGER NOT NULL DEFAULT 1',
+      );
+      await db.execute(
+        'ALTER TABLE $lessonsTable ADD COLUMN durationMinutes INTEGER NOT NULL DEFAULT 20',
+      );
+      await db.execute(
+        "ALTER TABLE $lessonsTable ADD COLUMN santaliQualityStatus TEXT NOT NULL DEFAULT 'unverified'",
+      );
+      await SeedData.applyLessonMetadata(db);
+    }
+    if (oldVersion < 10) await _createLessonCompletionsTable(db);
   }
 
   Future<void> _createAssessmentsTable(Database db) => db.execute('''
@@ -137,6 +159,28 @@ class DatabaseHelper {
       )
     ''');
 
+  Future<void> _createCustomAssignmentsTable(Database db) => db.execute('''
+      CREATE TABLE $customAssignmentsTable (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        grade TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        topic TEXT NOT NULL,
+        questions_json TEXT NOT NULL,
+        include_hindi INTEGER NOT NULL DEFAULT 1,
+        include_santali INTEGER NOT NULL DEFAULT 1,
+        include_english INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT
+      )
+    ''');
+
+  Future<void> _createLessonCompletionsTable(Database db) => db.execute('''
+      CREATE TABLE $lessonCompletionsTable (
+        lesson_id INTEGER PRIMARY KEY,
+        completed_at TEXT NOT NULL
+      )
+    ''');
+
   Future<List<Lesson>> getLessons({String? grade, String? subject}) async {
     final db = await database;
     final where = <String>[];
@@ -153,7 +197,7 @@ class DatabaseHelper {
       lessonsTable,
       where: where.isEmpty ? null : where.join(' AND '),
       whereArgs: args.isEmpty ? null : args,
-      orderBy: 'grade ASC, subject ASC, topic ASC',
+      orderBy: 'grade ASC, subject ASC, sequenceNumber ASC, topic ASC',
     );
     return rows.map(Lesson.fromMap).toList();
   }
@@ -172,6 +216,72 @@ class DatabaseHelper {
       'SELECT DISTINCT subject FROM $lessonsTable ORDER BY subject',
     );
     return rows.map((row) => row['subject'] as String).toList();
+  }
+
+  // ── Per-lesson completion tracking ─────────────────────────────────────
+
+  Future<Set<int>> getCompletedLessonIds() async {
+    final db = await database;
+    final rows = await db.query(lessonCompletionsTable, columns: ['lesson_id']);
+    return rows.map((row) => row['lesson_id'] as int).toSet();
+  }
+
+  Future<bool> toggleLessonCompletion(int lessonId) async {
+    final db = await database;
+    final existing = await db.query(
+      lessonCompletionsTable,
+      where: 'lesson_id = ?',
+      whereArgs: [lessonId],
+      limit: 1,
+    );
+    if (existing.isNotEmpty) {
+      await db.delete(
+        lessonCompletionsTable,
+        where: 'lesson_id = ?',
+        whereArgs: [lessonId],
+      );
+      return false;
+    }
+    await db.insert(lessonCompletionsTable, {
+      'lesson_id': lessonId,
+      'completed_at': DateTime.now().toIso8601String(),
+    });
+    return true;
+  }
+
+  // ── Custom assignments CRUD ─────────────────────────────────────────────
+
+  Future<int> insertCustomAssignment(CustomAssignment assignment) async {
+    final db = await database;
+    return db.insert(customAssignmentsTable, assignment.toMap());
+  }
+
+  Future<List<CustomAssignment>> getCustomAssignments() async {
+    final db = await database;
+    final rows = await db.query(
+      customAssignmentsTable,
+      orderBy: 'created_at DESC',
+    );
+    return rows.map(CustomAssignment.fromMap).toList();
+  }
+
+  Future<int> updateCustomAssignment(CustomAssignment assignment) async {
+    final db = await database;
+    return db.update(
+      customAssignmentsTable,
+      assignment.toMap(),
+      where: 'id = ?',
+      whereArgs: [assignment.id],
+    );
+  }
+
+  Future<int> deleteCustomAssignment(int id) async {
+    final db = await database;
+    return db.delete(
+      customAssignmentsTable,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   Future<void> close() async {

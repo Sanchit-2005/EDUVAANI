@@ -9,6 +9,23 @@ class SeedData {
     }
   }
 
+  /// Backfills ordering, duration and Santali review metadata for databases
+  /// created before those lesson fields existed.
+  static Future<void> applyLessonMetadata(Database db) async {
+    for (final lesson in lessons) {
+      await db.update(
+        'lessons',
+        {
+          'sequenceNumber': lesson.sequenceNumber,
+          'durationMinutes': lesson.durationMinutes,
+          'santaliQualityStatus': lesson.santaliQualityStatus,
+        },
+        where: 'grade = ? AND subject = ? AND topic = ?',
+        whereArgs: [lesson.grade, lesson.subject, lesson.topic],
+      );
+    }
+  }
+
   static final List<Lesson> lessons = [
     Lesson(
       grade: 'Grade 1',
@@ -19,6 +36,9 @@ class SeedData {
       santaliTranslation:
           'ᱜᱤᱫᱽᱨᱟᱹ ᱠᱚ ᱜᱮᱞ ᱜᱚᱴᱟᱝ ᱡᱤᱱᱤᱥ ᱮᱢᱟ ᱠᱚᱢ ᱟᱨ ᱢᱤᱫ-ᱢᱤᱫ ᱛᱮ ᱞᱮᱠᱷᱟ ᱪᱚ ᱠᱚᱢ᱾',
       isPrototypeTranslation: true,
+      sequenceNumber: 1,
+      durationMinutes: 5,
+      santaliQualityStatus: Lesson.santaliUnverified,
     ),
     Lesson(
       grade: 'Grade 1',
@@ -29,6 +49,9 @@ class SeedData {
       santaliTranslation:
           'ᱜᱤᱫᱽᱨᱟᱹ ᱠᱚ ᱟᱠᱚᱣᱟᱜ ᱯᱚᱛᱚᱵ ᱠᱷᱩᱞᱟᱹᱣ ᱞᱟᱜᱤᱫ ᱢᱮᱛᱟ ᱠᱚᱢ᱾',
       isPrototypeTranslation: true,
+      sequenceNumber: 1,
+      durationMinutes: 20,
+      santaliQualityStatus: Lesson.santaliUnverified,
     ),
     Lesson(
       grade: 'Grade 1',
@@ -39,6 +62,9 @@ class SeedData {
       santaliTranslation:
           'ᱵᱟᱨ ᱟᱨ ᱵᱟᱨ ᱛᱤᱱᱟᱹᱜ ᱦᱩᱭᱩᱜᱼᱟ, ᱜᱤᱫᱽᱨᱟᱹ ᱠᱚ ᱠᱩᱞᱤ ᱠᱚᱢ᱾',
       isPrototypeTranslation: true,
+      sequenceNumber: 2,
+      durationMinutes: 20,
+      santaliQualityStatus: Lesson.santaliUnverified,
     ),
     Lesson(
       grade: 'Grade 1',
@@ -49,6 +75,9 @@ class SeedData {
       santaliTranslation:
           'ᱢᱤᱫ ᱟᱹᱭᱠᱟᱹᱣ ᱢᱮ ᱟᱨ ᱜᱤᱫᱽᱨᱟᱹ ᱠᱚ ᱫᱩᱦᱲᱟᱹ ᱞᱟᱜᱤᱫ ᱢᱮᱛᱟ ᱠᱚᱢ᱾',
       isPrototypeTranslation: true,
+      sequenceNumber: 2,
+      durationMinutes: 5,
+      santaliQualityStatus: Lesson.santaliUnverified,
     ),
     Lesson(
       grade: 'Grade 2',
@@ -59,6 +88,9 @@ class SeedData {
       santaliTranslation:
           'ᱜᱮᱞ ᱟᱨ ᱢᱤᱫ ᱡᱟᱭᱜᱟ ᱵᱩᱡᱷᱟᱹᱣ ᱞᱟᱜᱤᱫ ᱢᱚᱱᱤ ᱵᱮᱵᱷᱟᱨ ᱢᱮ᱾',
       isPrototypeTranslation: true,
+      sequenceNumber: 1,
+      durationMinutes: 20,
+      santaliQualityStatus: Lesson.santaliUnverified,
     ),
     Lesson(
       grade: 'Grade 2',
@@ -69,6 +101,9 @@ class SeedData {
       santaliTranslation:
           'ᱵᱚᱨᱰ ᱨᱮ ᱟᱞᱜᱟ ᱟᱹᱲᱟᱹ ᱚᱞ ᱢᱮ ᱟᱨ ᱜᱤᱫᱽᱨᱟᱹ ᱠᱚ ᱯᱟᱲᱦᱟᱣ ᱞᱟᱜᱤᱫ ᱢᱮᱛᱟ ᱠᱚᱢ᱾',
       isPrototypeTranslation: true,
+      sequenceNumber: 1,
+      durationMinutes: 20,
+      santaliQualityStatus: Lesson.santaliUnverified,
     ),
   ];
 }
