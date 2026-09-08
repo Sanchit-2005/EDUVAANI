@@ -77,7 +77,19 @@ abstract class TranslationService {
 
 // ── Typed exception ───────────────────────────────────────────────────────────
 
-enum TranslationFailureKind { unavailable, model, response, request }
+enum TranslationFailureKind {
+  unavailable,
+  model,
+  response,
+  request,
+
+  /// The current platform has no model runtime for this feature at all —
+  /// e.g. on-device translation requested from a web build, where no ONNX
+  /// bundle or native host exists. This is a permanent, platform-level gap,
+  /// not a transient network/server failure, so it must never be reported
+  /// with [unavailable]'s "check that the ML server is running" wording.
+  unsupportedPlatform,
+}
 
 class TranslationApiException implements Exception {
   const TranslationApiException({
@@ -96,6 +108,8 @@ class TranslationApiException implements Exception {
 
   bool get isUnavailable => kind == TranslationFailureKind.unavailable;
   bool get isModelError => kind == TranslationFailureKind.model;
+  bool get isUnsupportedPlatform =>
+      kind == TranslationFailureKind.unsupportedPlatform;
 
   @override
   String toString() =>

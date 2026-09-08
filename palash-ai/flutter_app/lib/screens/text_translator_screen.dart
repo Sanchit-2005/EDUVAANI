@@ -1,5 +1,6 @@
 import 'dart:developer' as dev;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
@@ -38,7 +39,10 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
   bool _creatingAudio = false;
   TextToSpeechResult? _ttsResult;
 
-  bool _useOnDevice = true;
+  // No native on-device runtime or ONNX bundle exists for web — default and
+  // lock this off there instead of letting the user select a mode that can
+  // only ever fail. See on_device_services.dart for the matching guard.
+  bool _useOnDevice = !kIsWeb;
 
   /// ID of the classroom phrase currently reflected in the input field.
   /// Keys the input so a new selection can never blend with stale state.
@@ -233,7 +237,11 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
             actions: [
               DeviceStatusAction(
                 onDevice: _useOnDevice,
-                onPressed: () => setState(() => _useOnDevice = !_useOnDevice),
+                // kIsWeb: no native runtime to switch on to, so the toggle
+                // is inert here rather than offering a mode that always fails.
+                onPressed: kIsWeb
+                    ? null
+                    : () => setState(() => _useOnDevice = !_useOnDevice),
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
@@ -506,11 +514,13 @@ class _TranslationErrorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isModelError = error.isModelError;
-    final title = isModelError
-        ? 'IndicTrans2 model error'
-        : error.isUnavailable
-            ? 'Translation service unavailable'
-            : 'Translation response error';
+    final title = error.isUnsupportedPlatform
+        ? 'Not available on this platform'
+        : isModelError
+            ? 'IndicTrans2 model error'
+            : error.isUnavailable
+                ? 'Translation service unavailable'
+                : 'Translation response error';
     return Semantics(
       liveRegion: true,
       container: true,

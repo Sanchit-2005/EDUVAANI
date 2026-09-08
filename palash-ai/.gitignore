@@ -47,3 +47,7 @@ palash-ai/ml_pipeline/translation_service/pyservice.log
 
 
 *.log
+
+
+*.onnx.data
+
