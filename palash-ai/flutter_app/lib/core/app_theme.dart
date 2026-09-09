@@ -67,6 +67,27 @@ class AppGradients {
     end: Alignment.bottomRight,
   );
 
+  static const LinearGradient pageBackground = LinearGradient(
+    colors: [
+      Color(0xFFF8FAFC),
+      Color(0xFFF0F4FF),
+      Color(0xFFF5F3FF),
+    ],
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    stops: [0.0, 0.55, 1.0],
+  );
+
+  static const LinearGradient headerBand = LinearGradient(
+    colors: [
+      Color(0xFFEEF2FF),
+      Color(0xFFEDE9FE),
+      Color(0xFFF8FAFC),
+    ],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
   static LinearGradient card(Color base) => LinearGradient(
         colors: [base, Color.lerp(base, AppColors.primaryDark, 0.25)!],
         begin: Alignment.topLeft,
@@ -119,6 +140,7 @@ class AppRadius {
   static const double xs = 6;
   static const double sm = 10;
   static const double md = 14;
+  static const double card = 16;
   static const double lg = 18;
   static const double xl = 22;
   static const double full = 999;
@@ -173,7 +195,13 @@ class AppTheme {
         backgroundColor: AppColors.surface,
         elevation: 0,
         scrolledUnderElevation: 0,
-        systemOverlayStyle: SystemUiOverlayStyle.dark,
+        systemOverlayStyle: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          systemNavigationBarColor: AppColors.primary,
+          systemNavigationBarIconBrightness: Brightness.light,
+          systemNavigationBarDividerColor: Color(0xFF1E293B),
+        ),
         centerTitle: false,
         titleTextStyle: GoogleFonts.outfit(
           color: AppColors.textPrimary,
@@ -182,6 +210,29 @@ class AppTheme {
           letterSpacing: -0.3,
         ),
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
+      ),
+
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: AppColors.primary,
+        indicatorColor: AppColors.accent.withValues(alpha: 0.25),
+        surfaceTintColor: Colors.transparent,
+        labelTextStyle: WidgetStateProperty.all(
+          GoogleFonts.outfit(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        iconTheme: WidgetStateProperty.all(
+          const IconThemeData(color: Colors.white),
+        ),
+      ),
+
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: AppColors.primary,
+        selectedItemColor: Colors.white,
+        unselectedItemColor: Color(0xFF94A3B8),
+        elevation: 8,
       ),
 
       cardTheme: CardThemeData(

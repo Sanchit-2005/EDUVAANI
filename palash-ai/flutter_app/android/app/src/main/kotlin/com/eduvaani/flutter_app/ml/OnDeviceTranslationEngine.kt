@@ -2,13 +2,14 @@ package com.eduvaani.flutter_app.ml
 
 import android.content.Context
 import android.util.Log
-import ai.onnxruntime.*
+import ai.onnxruntime.OnnxTensor
+import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtSession
 import java.io.IOException
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.nio.FloatBuffer
 import java.nio.LongBuffer
 
+/** On-device greedy IndicTrans2 translation using the export's native K/V cache API. */
 class OnDeviceTranslationEngine(private val context: Context) {
 
     private var env: OrtEnvironment? = null
@@ -17,891 +18,371 @@ class OnDeviceTranslationEngine(private val context: Context) {
     private var decoderWithPastSession: OrtSession? = null
     private var tokenizer: SentencePieceTokenizer? = null
     private var processor: IndicProcessor? = null
-
     private var initialized = false
 
     @Synchronized
     fun initialize(): Boolean {
         if (initialized) {
-            Log.i(TAG, "[ON_DEVICE] Already initialized, returning true")
+            Log.i(TAG, "[ON_DEVICE] Already initialized")
             return true
         }
 
-        Log.i(TAG, "[ON_DEVICE] translate requested")
-        Log.i(TAG, "[ON_DEVICE] initialize started")
-        Log.d(TAG, "=== INITIALIZATION START ===")
-
         return try {
-            Log.d(TAG, "Loading model assets...")
-
-            Log.i(TAG, "[ON_DEVICE] ONNX environment creating")
-            env = OrtEnvironment.getEnvironment()
-            Log.i(TAG, "[ON_DEVICE] ONNX environment created")
-
-            val modelsDir = context.filesDir.resolve("models/indictrans2/int8")
+            val modelsDir = context.filesDir.resolve(MODELS_DIRECTORY)
             modelsDir.mkdirs()
-
-            Log.i(TAG, "[ON_DEVICE] models dir=${modelsDir.absolutePath}")
-
-            val assets = listOf(
-                "models/indictrans2/int8/encoder_model.onnx",
-                "models/indictrans2/int8/decoder_model.onnx",
-                "models/indictrans2/int8/decoder_with_past_model.onnx",
-                "models/indictrans2/int8/model.SRC",
-                "models/indictrans2/int8/model.TGT",
-                "models/indictrans2/int8/dict.SRC.json",
-                "models/indictrans2/int8/dict.TGT.json"
-            )
-
-            Log.d(TAG, "Loading model assets...")
-
-            for (asset in assets) {
-                try {
-                    Log.d(TAG, "[ON_DEVICE] opening asset: $asset")
-
-                    context.assets.open(asset).use { input ->
-                        val dest = modelsDir.resolve(asset.substringAfterLast('/'))
-
-                        copyAssetIfNeeded(asset, dest)
-
-                        val size = dest.length()
-
-                        Log.d(
-                            TAG,
-                            "[ON_DEVICE] extracted ${dest.name} size=$size"
-                        )
-                    }
-
-                } catch (e: Exception) {
-                    Log.e(
-                        TAG,
-                        "[ON_DEVICE] INITIALIZATION FAILED: asset=$asset exception=${e.javaClass.simpleName}: ${e.message}",
-                        e
-                    )
-
-                    throw e
-                }
+            for (asset in MODEL_ASSETS) {
+                copyAsset(asset, modelsDir.resolve(asset.substringAfterLast('/')))
             }
 
-            Log.d(TAG, "Creating ONNX sessions...")
-
-            Log.i(TAG, "[ON_DEVICE] creating encoder session")
-
-            val sessionOptions = OrtSession.SessionOptions()
-            sessionOptions.setIntraOpNumThreads(2)
-            sessionOptions.addCPU(true)
-
-            encoderSession = env!!.createSession(
-                modelsDir.resolve("encoder_model.onnx").absolutePath,
-                sessionOptions
-            )
-
-            Log.i(TAG, "[ON_DEVICE] encoder session created")
-
-            Log.i(TAG, "[ON_DEVICE] creating decoder session")
-
-            decoderSession = env!!.createSession(
-                modelsDir.resolve("decoder_model.onnx").absolutePath,
-                sessionOptions
-            )
-
-            Log.i(TAG, "[ON_DEVICE] decoder session created")
-
-            Log.i(TAG, "[ON_DEVICE] creating decoder_with_past session")
-
+            env = OrtEnvironment.getEnvironment()
+            val options = OrtSession.SessionOptions().apply {
+                setIntraOpNumThreads(2)
+                addCPU(true)
+            }
+            encoderSession = env!!.createSession(modelsDir.resolve("encoder_model.onnx").absolutePath, options)
+            decoderSession = env!!.createSession(modelsDir.resolve("decoder_model.onnx").absolutePath, options)
             decoderWithPastSession = env!!.createSession(
                 modelsDir.resolve("decoder_with_past_model.onnx").absolutePath,
-                sessionOptions
+                options
             )
 
-            Log.i(TAG, "[ON_DEVICE] decoder_with_past session created")
+            // Log the actual packaged model contract on every fresh process start.
+            logSessionInterface("encoder", encoderSession!!)
+            logSessionInterface("decoder", decoderSession!!)
+            logSessionInterface("decoder_with_past", decoderWithPastSession!!)
+            validateDecoderCacheInterface()
 
-            val decoderWithPastInputNames =
-                decoderWithPastSession!!.inputNames.toList().sorted()
-
-            Log.i(
-                TAG,
-                "[ON_DEVICE] decoder_with_past expected inputs (${decoderWithPastInputNames.size})=$decoderWithPastInputNames"
-            )
-
-            Log.d(TAG, "Initializing tokenizer...")
-
-            Log.i(TAG, "[ON_DEVICE] tokenizer initialization started")
-
-            val tokenizerObj = SentencePieceTokenizer(context)
-
-            try {
-                Log.d(TAG, "Loading model.SRC...")
-
-                val modelOk =
-                    tokenizerObj.loadModel("models/indictrans2/int8/model.SRC")
-
-                Log.d(TAG, "Loading model.TGT...")
-
-                // Use loadTargetModel — NOT loadModel — so TGT pieces go into
-                // the separate tgt trie/maps and do NOT overwrite the SRC ones.
-                tokenizerObj.loadTargetModel(
-                    "models/indictrans2/int8/model.TGT"
-                )
-
-                Log.d(TAG, "Loading dict.SRC.json...")
-
-                val vocabOk =
-                    tokenizerObj.loadVocab(
-                        "models/indictrans2/int8/dict.SRC.json"
-                    )
-
-                Log.d(TAG, "Loading dict.TGT.json...")
-
-                val tgtVocabOk =
-                    tokenizerObj.loadTargetVocab(
-                        "models/indictrans2/int8/dict.TGT.json"
-                    )
-
-                if (!modelOk) {
-                    throw IllegalStateException(
-                        "SentencePiece model.SRC failed to load"
-                    )
+            tokenizer = SentencePieceTokenizer(context).also { sentencePiece ->
+                check(sentencePiece.loadModel("$MODELS_DIRECTORY/model.SRC")) {
+                    "SentencePiece model.SRC failed to load"
                 }
-
-                if (!vocabOk) {
-                    throw IllegalStateException(
-                        "SentencePiece dict.SRC.json failed to load"
-                    )
+                sentencePiece.loadTargetModel("$MODELS_DIRECTORY/model.TGT")
+                check(sentencePiece.loadVocab("$MODELS_DIRECTORY/dict.SRC.json")) {
+                    "SentencePiece dict.SRC.json failed to load"
                 }
-
-                if (!tgtVocabOk) {
-                    throw IllegalStateException(
-                        "SentencePiece dict.TGT.json failed to load"
-                    )
+                check(sentencePiece.loadTargetVocab("$MODELS_DIRECTORY/dict.TGT.json")) {
+                    "SentencePiece dict.TGT.json failed to load"
                 }
-
-                tokenizer = tokenizerObj
-
-                Log.i(
-                    TAG,
-                    "[ON_DEVICE] tokenizer initialization completed pieces=${tokenizerObj.pieceCount}"
-                )
-
-            } catch (e: Exception) {
-
-                Log.e(
-                    TAG,
-                    "[ON_DEVICE] INITIALIZATION FAILED: tokenizer exception=${e.javaClass.simpleName}: ${e.message}",
-                    e
-                )
-
-                throw e
+                Log.i(TAG, "[ON_DEVICE] tokenizer initialized pieces=${sentencePiece.pieceCount}")
             }
-
-            Log.d(TAG, "Initializing processor...")
-
-            Log.i(TAG, "[ON_DEVICE] processor initialization started")
-
             processor = IndicProcessor()
-
-            Log.i(TAG, "[ON_DEVICE] processor initialization completed")
-
             initialized = true
-
-            Log.d(TAG, "=== INITIALIZATION SUCCESS ===")
-
             Log.i(TAG, "[ON_DEVICE] initialization completed")
-
             true
-
-        } catch (e: Exception) {
-
-            Log.e(
-                TAG,
-                "[ON_DEVICE] INITIALIZATION FAILED: exception=${e.javaClass.simpleName}: ${e.message}",
-                e
-            )
-
-            Log.e(
-                TAG,
-                "=== COMPLETE INITIALIZATION FAILURE ===",
-                e
-            )
-
+        } catch (error: Exception) {
+            Log.e(TAG, "[ON_DEVICE] INITIALIZATION FAILED: ${error.javaClass.simpleName}: ${error.message}", error)
             false
         }
     }
 
     @Synchronized
-    fun translate(
-        text: String,
-        sourceLang: String,
-        targetLang: String
-    ): String {
-
-        Log.d(
-            TAG,
-            "translate() called - initialized: $initialized"
-        )
-
-        if (!initialized) {
-            Log.w(
-                TAG,
-                "Engine not initialized, attempting initialization..."
-            )
-
-            initialize()
+    fun translate(text: String, sourceLang: String, targetLang: String): String {
+        if (!initialized && !initialize()) {
+            throw IllegalStateException("Engine not initialized")
         }
+        checkNotNull(tokenizer)
+        checkNotNull(processor)
+        checkNotNull(encoderSession)
+        checkNotNull(decoderSession)
+        checkNotNull(decoderWithPastSession)
 
-        if (
-            encoderSession == null ||
-            decoderSession == null ||
-            decoderWithPastSession == null ||
-            tokenizer == null ||
-            processor == null
-        ) {
+        Log.i(TAG, "[ON_DEVICE] source language=$sourceLang target language=$targetLang")
+        val preprocessed = processor!!.preprocessBatch(listOf(text), sourceLang, targetLang).first()
+        val inputIds = tokenizer!!.encode(preprocessed)
+        Log.i(TAG, "[ON_DEVICE] preprocessed input=$preprocessed")
+        Log.i(TAG, "[ON_DEVICE] token IDs=$inputIds")
+        if (inputIds.isEmpty()) return ""
 
-            Log.e(
-                TAG,
-                "Engine not fully initialized - some components are null"
-            )
-
-            throw IllegalStateException(
-                "Engine not initialized"
-            )
+        val encoderHidden = runEncoder(inputIds)
+        val srcLen = encoderHidden.size / HIDDEN_SIZE
+        require(srcLen > 0 && srcLen * HIDDEN_SIZE == encoderHidden.size) {
+            "Unexpected encoder hidden-state size=${encoderHidden.size}"
         }
+        Log.i(TAG, "[ON_DEVICE] encoder completed srcLen=$srcLen hiddenStatesLength=${encoderHidden.size}")
 
-        Log.i(
-            TAG,
-            "[ON_DEVICE] source language=$sourceLang target language=$targetLang"
-        )
-
-        val preprocessed =
-            processor!!.preprocessBatch(
-                listOf(text),
-                sourceLang,
-                targetLang
-            )[0]
-
-        Log.i(
-            TAG,
-            "[ON_DEVICE] preprocessed input=$preprocessed"
-        )
-
-        val inputIds =
-            tokenizer!!.encode(preprocessed)
-
-        Log.i(
-            TAG,
-            "[ON_DEVICE] token IDs=$inputIds"
-        )
-
-        if (inputIds.isEmpty()) {
-            Log.w(
-                TAG,
-                "Empty token IDs, returning empty string"
-            )
-
-            return ""
-        }
-
-        val bosId = tokenizer!!.bosId
+        // The model was validated with a single EOS (id 2) decoder seed. Both
+        // language tags are already supplied to the encoder in [preprocessed].
         val eosId = tokenizer!!.eosId
-
-        val maxLength = 256
-        val repetitionPenalty = 1.2f
-
-        Log.d(TAG, "Running encoder...")
-
-        val encoderHidden =
-            runEncoder(inputIds)
-
-        Log.i(
-            TAG,
-            "[ON_DEVICE] encoder completed srcLen=${inputIds.size} hiddenStatesLength=${encoderHidden.size}"
-        )
-
-        val actualSeqLen =
-            encoderHidden.size / 512
-
-        Log.d(
-            TAG,
-            "Calculated sequence length from encoder output: $actualSeqLen (based on ${encoderHidden.size} elements and 512 hidden dim)"
-        )
-
-        Log.d(
-            TAG,
-            "Running first decoder step..."
-        )
-
-        // IndicTrans2 uses a forced_bos_token_id equal to the target-language tag.
-        // The decoder must see [BOS=0, tgt_lang_id] as its seed sequence; the
-        // logits at position 1 (after tgt_lang_id) are the first real content
-        // prediction.  Without this, the model predicts EOS immediately because
-        // [BOS] alone gives no signal about which target language to generate.
-        val forcedBosId = tokenizer!!.tgtLangId  // sat_Olck = 29925 in SRC vocab
-        Log.i(TAG, "[ON_DEVICE] forced BOS tgt_lang_id=$forcedBosId")
-
-        // seq is the FULL growing decoder input: [EOS, tgt_lang_id, tok1, tok2, ...].
-        // decoder_with_past_model.onnx cannot be used here (see runDecoderStep
-        // doc comment) — every step recomputes self- and cross-attention from
-        // scratch over the whole sequence using decoder_model.onnx instead.
-        val seq = mutableListOf(eosId, forcedBosId)
-
-        val firstLogits =
-            runDecoderStep(
-                seq,
-                encoderHidden,
-                actualSeqLen
-            )
-
         val generatedIds = ArrayList<Int>()
-        // generatedIds tracks what the decoder has produced (excl. the BOS seed).
-        // The forced tgt_lang_id is the first committed token.
-        generatedIds.add(forcedBosId)
-
-        var logits = firstLogits
-
-        // min_new_tokens enforcement (HF-style): EOS cannot be the very first
-        // generated token.  Some short inputs otherwise cause the model to
-        // predict EOS immediately after the forced tgt_lang tag, yielding an
-        // empty translation.  Mask EOS out of step 1's logits entirely.
-        suppressToken(logits, eosId)
-
-        var nextTokenId = argmax(logits)
-
-        Log.i(
-            TAG,
-            "[ON_DEVICE] decoder step 1 [BOS,tgt_lang=$forcedBosId] -> token=$nextTokenId (EOS suppressed)"
-        )
-
-        generatedIds.add(nextTokenId)
-        seq.add(nextTokenId)
-
-        Log.d(
-            TAG,
-            "Starting generation loop..."
-        )
-
-        // min_new_tokens = 2: step 1 (above) and loop step=1 together produce
-        // the first two real content tokens.  EOS is blocked for both so short
-        // inputs (e.g. "नमस्ते") can't collapse to an empty translation.  From
-        // loop step=2 onward, EOS selection is unrestricted so generation can
-        // still terminate naturally.
-        val minNewTokens = 2
-
-        for (step in 1 until maxLength) {
-
-            logits =
-                runDecoderStep(
-                    seq,
-                    encoderHidden,
-                    actualSeqLen
-                )
-
-            val uniqueGenerated =
-                generatedIds.toSet()
-
-            for (tokenId in uniqueGenerated) {
-                applyRepetitionPenalty(
-                    logits,
-                    tokenId,
-                    repetitionPenalty
-                )
+        var step = runFirstDecoderStep(eosId, encoderHidden, srcLen)
+        try {
+            if (MIN_NEW_TOKENS > 0) {
+                suppressToken(step.logits, eosId)
             }
+            var nextTokenId = argmax(step.logits)
+            generatedIds += nextTokenId
+            Log.i(TAG, "[ON_DEVICE] generation step=1 seed=[EOS] token=$nextTokenId")
 
-            if (step < minNewTokens) {
-                suppressToken(logits, eosId)
+            var generationStep = 1
+            while (nextTokenId != eosId && generationStep < MAX_GENERATION_LENGTH) {
+                val previousPast = step.past
+                step = runDecoderWithPast(nextTokenId, previousPast, srcLen)
+                previousPast.clear()
+                applyRepetitionPenalty(step.logits, generatedIds, REPETITION_PENALTY)
+                if (generationStep + 1 < MIN_NEW_TOKENS) {
+                    suppressToken(step.logits, eosId)
+                }
+                nextTokenId = argmax(step.logits)
+                generatedIds += nextTokenId
+                generationStep += 1
+                Log.i(TAG, "[ON_DEVICE] generation step=$generationStep token=$nextTokenId")
             }
-
-            nextTokenId =
-                argmax(logits)
-
-            generatedIds.add(nextTokenId)
-
-            Log.i(
-                TAG,
-                "[ON_DEVICE] generation step=$step token=$nextTokenId" +
-                    (if (step < minNewTokens) " (EOS suppressed)" else "")
-            )
-
             if (nextTokenId == eosId) {
-
-                Log.i(
-                    TAG,
-                    "[ON_DEVICE] EOS reached at step=$step"
-                )
-
-                break
+                Log.i(TAG, "[ON_DEVICE] EOS reached at step=$generationStep")
+            } else {
+                Log.w(TAG, "[ON_DEVICE] generation stopped at maxLength=$MAX_GENERATION_LENGTH")
             }
-
-            seq.add(nextTokenId)
+        } finally {
+            step.past.clear()
         }
 
-        Log.i(
-            TAG,
-            "[ON_DEVICE] final generated IDs=$generatedIds"
-        )
-
-        // generatedIds[0] is the forced tgt_lang_id control token (e.g.
-        // sat_Olck=29925), not real content — it exists purely to seed the
-        // decoder.  Decoding it directly produces visible tag residue (e.g.
-        // "ग्रौ" prefixed onto the real Ol Chiki output), since that ID also
-        // happens to map to a real piece in the TGT vocab.  Strip it, and
-        // strip a trailing EOS if present, before decoding only the actual
-        // generated content tokens.
-        val contentIds =
-            generatedIds
-                .drop(1)
-                .let { ids ->
-                    if (ids.isNotEmpty() && ids.last() == eosId) {
-                        ids.dropLast(1)
-                    } else {
-                        ids
-                    }
-                }
-
-        Log.i(
-            TAG,
-            "[ON_DEVICE] content IDs (tgt_lang + EOS stripped)=$contentIds"
-        )
-
-        val result =
-            decodeAndPostprocess(
-                contentIds,
-                targetLang
-            )
-
-        Log.i(
-            TAG,
-            "[ON_DEVICE] final decoded translation=$result"
-        )
-
-        return result
-    }
-
-    private fun runEncoder(
-        inputIds: List<Int>
-    ): FloatArray {
-
-        val session =
-            encoderSession
-                ?: throw IllegalStateException(
-                    "Encoder not initialized"
-                )
-
-        val inputIdsBuffer =
-            LongBuffer.wrap(
-                LongArray(inputIds.size) {
-                    inputIds[it].toLong()
-                }
-            )
-
-        val attentionMaskBuffer =
-            LongBuffer.wrap(
-                LongArray(inputIds.size) {
-                    1
-                }
-            )
-
-        val inputIdsTensor =
-            OnnxTensor.createTensor(
-                env!!,
-                inputIdsBuffer,
-                longArrayOf(
-                    1,
-                    inputIds.size.toLong()
-                )
-            )
-
-        val attentionMaskTensor =
-            OnnxTensor.createTensor(
-                env!!,
-                attentionMaskBuffer,
-                longArrayOf(
-                    1,
-                    inputIds.size.toLong()
-                )
-            )
-
-        val inputs: Map<String, OnnxTensor> =
-            mapOf(
-                "input_ids" to inputIdsTensor,
-                "attention_mask" to attentionMaskTensor
-            )
-
-        val results =
-            session.run(inputs)
-
-        val output =
-            results[0].value
-
-        Log.d(
-            TAG,
-            "Encoder output type: ${output.javaClass}"
-        )
-
-        val hiddenStates =
-            when (output) {
-
-                is Array<*> -> {
-
-                    if (
-                        output.isNotEmpty() &&
-                        output[0] is FloatArray
-                    ) {
-
-                        val floatArray =
-                            output[0] as FloatArray
-
-                        Log.d(
-                            TAG,
-                            "Encoder output shape: [1, ${output.size}, ${floatArray.size}] - total elements: ${output.size * floatArray.size}"
-                        )
-
-                        var totalSize = 0
-
-                        for (i in output.indices) {
-
-                            val subArray =
-                                output[i] as FloatArray
-
-                            totalSize +=
-                                subArray.size
-                        }
-
-                        val flattenedArray =
-                            FloatArray(totalSize)
-
-                        var offset = 0
-
-                        for (i in output.indices) {
-
-                            val subArray =
-                                output[i] as FloatArray
-
-                            System.arraycopy(
-                                subArray,
-                                0,
-                                flattenedArray,
-                                offset,
-                                subArray.size
-                            )
-
-                            offset +=
-                                subArray.size
-                        }
-
-                        flattenedArray
-
-                    } else if (
-                        output.isNotEmpty() &&
-                        output[0] is Array<*>
-                    ) {
-
-                        val nestedArray =
-                            output[0] as Array<*>
-
-                        if (
-                            nestedArray.isNotEmpty() &&
-                            nestedArray[0] is FloatArray
-                        ) {
-
-                            val innerArray =
-                                nestedArray[0] as FloatArray
-
-                            Log.d(
-                                TAG,
-                                "Encoder output shape: [${nestedArray.size}, ${innerArray.size}] - total elements: ${nestedArray.size * innerArray.size}"
-                            )
-
-                            var totalSize = 0
-
-                            for (i in nestedArray.indices) {
-
-                                val subArray =
-                                    nestedArray[i] as FloatArray
-
-                                totalSize +=
-                                    subArray.size
-                            }
-
-                            val flattenedArray =
-                                FloatArray(totalSize)
-
-                            var offset = 0
-
-                            for (i in nestedArray.indices) {
-
-                                val subArray =
-                                    nestedArray[i] as FloatArray
-
-                                System.arraycopy(
-                                    subArray,
-                                    0,
-                                    flattenedArray,
-                                    offset,
-                                    subArray.size
-                                )
-
-                                offset +=
-                                    subArray.size
-                            }
-
-                            flattenedArray
-
-                        } else {
-
-                            throw IllegalArgumentException(
-                                "Unexpected encoder output structure: ${output[0]?.javaClass}"
-                            )
-                        }
-
-                    } else {
-
-                        throw IllegalArgumentException(
-                            "Unexpected encoder output type: ${output.javaClass}"
-                        )
-                    }
-                }
-
-                is FloatArray -> {
-
-                    Log.d(
-                        TAG,
-                        "Encoder output shape: [${output.size}]"
-                    )
-
-                    output
-                }
-
-                else -> {
-
-                    throw IllegalArgumentException(
-                        "Unexpected encoder output type: ${output.javaClass}"
-                    )
-                }
-            }
-
-        return hiddenStates
-    }
-
-    /**
-     * Run decoder_model (no KV cache) on the FULL sequence generated so far.
-     *
-     * IndicTrans2 is mBART-style: decoder_start_token_id = EOS (2), not BOS (0).
-     * forced_bos_token_id = target-language tag (e.g. sat_Olck=29925 in SRC vocab).
-     * seq[0]=EOS, seq[1]=forcedBosId, seq[2..]=previously generated tokens.
-     *
-     * ROOT-CAUSE NOTE (2026-09-09): decoder_with_past_model.onnx CANNOT be
-     * bootstrapped on this export.  decoder_model.onnx has no present_*
-     * outputs at all (verified via ONNX Runtime session introspection), so
-     * there is no way to obtain real cross-attention K/V for the seed tokens
-     * [EOS, tgt_lang_id].  Feeding decoder_with_past an all-zero past
-     * (self-attn AND cross-attn slots) reproduces, deterministically and
-     * independent of this Kotlin code, the exact
-     * "/decoder/layers.0/self_attn/Reshape_7 ... input {1,8,1,3} requested
-     * {8,1,1}" crash — confirmed by running the identical feed dict directly
-     * against decoder_with_past_model.onnx in Python/onnxruntime outside the
-     * app. Setting attention_mask length to match the true (empty) cache
-     * avoids that crash but then fails on
-     * "/decoder/layers.0/encoder_attn/Reshape_4 ... dimension value zero",
-     * because the cross-attention past slots are never populated. There is
-     * no supported way to seed decoder_with_past correctly with only the
-     * assets shipped in this build.
-     *
-     * The only path that is both correct and crash-free with these exact
-     * ONNX files is to always call decoder_model with the full growing
-     * sequence (self- and cross-attention recomputed from scratch every
-     * step) and read logits at the last position.  This is O(n) work per
-     * step instead of O(1), but for translation-length outputs (<=256
-     * tokens) it is fast enough and was verified end-to-end in Python for
-     * both a short input ("नमस्ते") and a longer one without any
-     * OrtException.
-     *
-     * input_ids shape:      [1, seq.size]
-     * attention_mask shape: [1, seq.size]   — all positions attended
-     * Returns: logits[0, seq.size-1, :] — vocab-size FloatArray at the last position.
-     */
-    private fun runDecoderStep(
-        seq: List<Int>,
-        encoderHidden: FloatArray,
-        srcLen: Int
-    ): FloatArray {
-
-        val session = decoderSession
-            ?: throw IllegalStateException("Decoder not initialized")
-
-        val len = seq.size
-
-        val inputIdsBuffer = LongBuffer.wrap(LongArray(len) { seq[it].toLong() })
-        val attentionMaskBuffer = LongBuffer.wrap(LongArray(len) { 1L })
-
-        val inputIdsTensor = OnnxTensor.createTensor(
-            env!!, inputIdsBuffer, longArrayOf(1, len.toLong())
-        )
-        val attentionMaskTensor = OnnxTensor.createTensor(
-            env!!, attentionMaskBuffer, longArrayOf(1, len.toLong())
-        )
-        val encoderHiddenTensor = OnnxTensor.createTensor(
-            env!!, FloatBuffer.wrap(encoderHidden), longArrayOf(1, srcLen.toLong(), 512)
-        )
-        val encoderAttentionMaskTensor = OnnxTensor.createTensor(
-            env!!, LongBuffer.wrap(LongArray(srcLen) { 1 }), longArrayOf(1, srcLen.toLong())
-        )
-
-        val results = session.run(mapOf(
-            "input_ids"              to inputIdsTensor,
-            "attention_mask"         to attentionMaskTensor,
-            "encoder_hidden_states"  to encoderHiddenTensor,
-            "encoder_attention_mask" to encoderAttentionMaskTensor
-        ))
-
-        // output shape is [1, tgt_len=len, vocab_size] — extract last position.
-        val output = results[0].value
-        Log.d(TAG, "Decoder step (len=$len) output type: ${output.javaClass}")
-
-        val logits = when (output) {
-            is Array<*> -> when {
-                output.isNotEmpty() && output[0] is Array<*> -> {
-                    // shape [batch=1][tgt_len][vocab] — take last tgt position
-                    val batch0 = output[0] as Array<*>
-                    batch0[batch0.size - 1] as? FloatArray
-                        ?: throw IllegalArgumentException("Unexpected nested array element type")
-                }
-                output.isNotEmpty() && output[0] is FloatArray ->
-                    // shape [tgt_len][vocab] — take last
-                    output[output.size - 1] as FloatArray
-                else ->
-                    throw IllegalArgumentException("Unexpected decoder output type: ${output.javaClass}")
-            }
-            is FloatArray -> output
-            else -> throw IllegalArgumentException("Unexpected decoder output type: ${output.javaClass}")
+        val contentIds = if (generatedIds.lastOrNull() == eosId) generatedIds.dropLast(1) else generatedIds
+        Log.i(TAG, "[ON_DEVICE] final generated IDs=$generatedIds")
+        Log.i(TAG, "[ON_DEVICE] content IDs (trailing EOS stripped)=$contentIds")
+        return decodeAndPostprocess(contentIds, targetLang).also {
+            Log.i(TAG, "[ON_DEVICE] final decoded translation=$it")
         }
-
-        return logits
     }
 
-    // runDecoderWithPast / createDummyPast / extractPresent were removed.
-    // decoder_with_past_model.onnx cannot be bootstrapped with this asset
-    // set: decoder_model.onnx exports no present_* KV tensors, so the
-    // cross-attention past slots for the seed tokens [EOS, tgt_lang_id] can
-    // never be populated with real values.  Feeding it an all-zero past
-    // (self- and cross-attention) reproducibly crashes ONNX Runtime with a
-    // Reshape error, independent of any Kotlin-side bug — confirmed by
-    // replaying the identical feed dict directly in Python. See the
-    // runDecoderStep() doc comment above for details.  decoderWithPastSession
-    // is still created at init (harmless) but is no longer called.
+    private data class DecoderStep(val logits: FloatArray, val past: PastKeyValues)
+
+    private data class PastKeyValues(
+        val tensors: MutableMap<String, FloatArray>,
+        val decoderLength: Int
+    ) {
+        fun clear() = tensors.clear()
+    }
+
+    private fun runEncoder(inputIds: List<Int>): FloatArray {
+        val inputTensor = createLongTensor(
+            LongArray(inputIds.size) { inputIds[it].toLong() },
+            longArrayOf(1, inputIds.size.toLong())
+        )
+        val maskTensor = createLongTensor(LongArray(inputIds.size) { 1L }, longArrayOf(1, inputIds.size.toLong()))
+        try {
+            val results = encoderSession!!.run(mapOf("input_ids" to inputTensor, "attention_mask" to maskTensor))
+            try {
+                return flattenFloatTensor(resultValue(results, "last_hidden_state"))
+            } finally {
+                results.close()
+            }
+        } finally {
+            inputTensor.close()
+            maskTensor.close()
+        }
+    }
+
+    /** First decoder call: [EOS] in, logits plus decoder and encoder K/V caches out. */
+    private fun runFirstDecoderStep(seedTokenId: Int, encoderHidden: FloatArray, srcLen: Int): DecoderStep {
+        val inputIds = createLongTensor(longArrayOf(seedTokenId.toLong()), longArrayOf(1, 1))
+        val hiddenStates = OnnxTensor.createTensor(
+            env!!,
+            FloatBuffer.wrap(encoderHidden),
+            longArrayOf(1, srcLen.toLong(), HIDDEN_SIZE.toLong())
+        )
+        val encoderMask = createLongTensor(LongArray(srcLen) { 1L }, longArrayOf(1, srcLen.toLong()))
+        try {
+            val results = decoderSession!!.run(
+                mapOf(
+                    "input_ids" to inputIds,
+                    "encoder_hidden_states" to hiddenStates,
+                    "encoder_attention_mask" to encoderMask
+                )
+            )
+            try {
+                val cache = mutableMapOf<String, FloatArray>()
+                for (layer in 0 until DECODER_LAYERS) {
+                    for (attention in ATTENTION_TYPES) {
+                        for (component in CACHE_COMPONENTS) {
+                            val outputName = "present.$layer.$attention.$component"
+                            val inputName = "past_key_values.$layer.$attention.$component"
+                            cache[inputName] = flattenFloatTensor(resultValue(results, outputName))
+                        }
+                    }
+                }
+                return DecoderStep(
+                    logits = flattenFloatTensor(resultValue(results, "logits")),
+                    past = PastKeyValues(cache, decoderLength = 1)
+                )
+            } finally {
+                results.close()
+            }
+        } finally {
+            inputIds.close()
+            hiddenStates.close()
+            encoderMask.close()
+        }
+    }
+
+    /** Continuation decoder call: newest token plus prior K/V caches in. */
+    private fun runDecoderWithPast(newestTokenId: Int, past: PastKeyValues, srcLen: Int): DecoderStep {
+        val inputs = mutableMapOf<String, OnnxTensor>()
+        inputs["input_ids"] = createLongTensor(longArrayOf(newestTokenId.toLong()), longArrayOf(1, 1))
+        inputs["encoder_attention_mask"] = createLongTensor(
+            LongArray(srcLen) { 1L },
+            longArrayOf(1, srcLen.toLong())
+        )
+        try {
+            for ((name, values) in past.tensors) {
+                val sequenceLength = if (name.contains(".decoder.")) past.decoderLength else srcLen
+                inputs[name] = OnnxTensor.createTensor(
+                    env!!,
+                    FloatBuffer.wrap(values),
+                    longArrayOf(1, NUM_HEADS.toLong(), sequenceLength.toLong(), HEAD_SIZE.toLong())
+                )
+            }
+            val results = decoderWithPastSession!!.run(inputs)
+            try {
+                // Continuation returns only self-attention K/V. Cross-attention
+                // encoder K/V remains the exact first-step value, unchanged.
+                val nextCache = past.tensors.toMutableMap()
+                for (layer in 0 until DECODER_LAYERS) {
+                    for (component in CACHE_COMPONENTS) {
+                        val outputName = "present.$layer.decoder.$component"
+                        val inputName = "past_key_values.$layer.decoder.$component"
+                        nextCache[inputName] = flattenFloatTensor(resultValue(results, outputName))
+                    }
+                }
+                return DecoderStep(
+                    logits = flattenFloatTensor(resultValue(results, "logits")),
+                    past = PastKeyValues(nextCache, past.decoderLength + 1)
+                )
+            } finally {
+                results.close()
+            }
+        } finally {
+            for (tensor in inputs.values) tensor.close()
+        }
+    }
+
+    private fun createLongTensor(values: LongArray, shape: LongArray): OnnxTensor =
+        OnnxTensor.createTensor(env!!, LongBuffer.wrap(values), shape)
+
+    private fun resultValue(results: OrtSession.Result, name: String): Any {
+        for (entry in results) {
+            if (entry.key == name) return entry.value.value
+        }
+        throw IllegalStateException("Missing ONNX output: $name")
+    }
+
+    private fun flattenFloatTensor(value: Any?): FloatArray {
+        val flattened = FloatArray(countFloatElements(value))
+        copyFloatElements(value, flattened, 0)
+        return flattened
+    }
+
+    private fun countFloatElements(value: Any?): Int = when (value) {
+        is FloatArray -> value.size
+        is Array<*> -> value.sumOf { countFloatElements(it) }
+        else -> throw IllegalArgumentException("Unexpected tensor value type: ${value?.javaClass}")
+    }
+
+    private fun copyFloatElements(value: Any?, output: FloatArray, offset: Int): Int = when (value) {
+        is FloatArray -> {
+            value.copyInto(output, destinationOffset = offset)
+            offset + value.size
+        }
+        is Array<*> -> {
+            var nextOffset = offset
+            for (item in value) nextOffset = copyFloatElements(item, output, nextOffset)
+            nextOffset
+        }
+        else -> throw IllegalArgumentException("Unexpected tensor value type: ${value?.javaClass}")
+    }
 
     private fun applyRepetitionPenalty(
         logits: FloatArray,
-        tokenId: Int,
+        generatedIds: Collection<Int>,
         penalty: Float
     ) {
-
-        if (penalty == 1.0f) {
-            return
-        }
-
-        if (tokenId in logits.indices) {
-
-            val logit =
-                logits[tokenId]
-
-            logits[tokenId] =
-                if (logit < 0) {
-                    logit * penalty
-                } else {
-                    logit / penalty
-                }
+        if (penalty == 1.0f) return
+        for (id in generatedIds.toSet()) {
+            if (id in logits.indices) {
+                val logit = logits[id]
+                logits[id] = if (logit < 0) logit * penalty else logit / penalty
+            }
         }
     }
 
-    /**
-     * Mask a single vocab index out of the logits in-place by setting it to
-     * negative infinity, guaranteeing argmax() will never select it.  Used to
-     * enforce a minimum-new-tokens constraint by blocking EOS on the earliest
-     * generation steps (mirrors HF's min_new_tokens logits processor).
-     */
-    private fun suppressToken(
-        logits: FloatArray,
-        tokenId: Int
-    ) {
-
+    private fun suppressToken(logits: FloatArray, tokenId: Int) {
         if (tokenId in logits.indices) {
             logits[tokenId] = Float.NEGATIVE_INFINITY
         }
     }
 
-    private fun argmax(
-        logits: FloatArray
-    ): Int {
-
-        var maxIndex = 0
-
-        var maxValue =
-            logits[0]
-
+    private fun argmax(logits: FloatArray): Int {
+        var index = 0
         for (i in 1 until logits.size) {
-
-            if (logits[i] > maxValue) {
-
-                maxValue =
-                    logits[i]
-
-                maxIndex =
-                    i
-            }
+            if (logits[i] > logits[index]) index = i
         }
-
-        return maxIndex
+        return index
     }
 
-    private fun decodeAndPostprocess(
-        generatedIds: List<Int>,
-        targetLang: String
-    ): String {
+    private fun decodeAndPostprocess(generatedIds: List<Int>, targetLang: String): String {
+        tokenizer!!.switchToTargetMode()
+        return try {
+            val decoded = tokenizer!!.decode(generatedIds)
+            processor!!.postprocessBatch(listOf(decoded), targetLang).firstOrNull() ?: decoded
+        } finally {
+            tokenizer!!.switchToSourceMode()
+        }
+    }
 
-        tokenizer?.switchToTargetMode()
+    private fun logSessionInterface(name: String, session: OrtSession) {
+        Log.i(TAG, "[ON_DEVICE] $name inputs (${session.inputNames.size})=${session.inputNames.sorted()}")
+        Log.i(TAG, "[ON_DEVICE] $name outputs (${session.outputNames.size})=${session.outputNames.sorted()}")
+    }
 
-        val decoded =
-            tokenizer?.decode(generatedIds)
-                ?: ""
-
-        tokenizer?.switchToSourceMode()
-
-        return processor
-            ?.postprocessBatch(
-                listOf(decoded),
-                targetLang
-            )
-            ?.firstOrNull()
-            ?: decoded
+    private fun validateDecoderCacheInterface() {
+        val expectedFirstOutputs = mutableSetOf("logits")
+        val expectedCachedInputs = mutableSetOf("input_ids", "encoder_attention_mask")
+        for (layer in 0 until DECODER_LAYERS) {
+            for (attention in ATTENTION_TYPES) {
+                for (component in CACHE_COMPONENTS) {
+                    expectedFirstOutputs += "present.$layer.$attention.$component"
+                    expectedCachedInputs += "past_key_values.$layer.$attention.$component"
+                }
+            }
+        }
+        check(decoderSession!!.outputNames.containsAll(expectedFirstOutputs)) {
+            "decoder_model.onnx does not expose the required present K/V outputs"
+        }
+        check(decoderWithPastSession!!.inputNames.containsAll(expectedCachedInputs)) {
+            "decoder_with_past_model.onnx does not accept the required past K/V inputs"
+        }
+        check(decoderWithPastSession!!.outputNames.contains("logits")) {
+            "decoder_with_past_model.onnx does not expose logits"
+        }
     }
 
     @Throws(IOException::class)
-    private fun copyAssetIfNeeded(
-        assetPath: String,
-        destFile: java.io.File
-    ) {
-
-        if (destFile.exists()) {
-            return
+    private fun copyAsset(assetPath: String, destination: java.io.File) {
+        destination.parentFile?.mkdirs()
+        context.assets.open(assetPath).use { input ->
+            destination.outputStream().use { output -> input.copyTo(output) }
         }
-
-        destFile.parentFile?.mkdirs()
-
-        context.assets
-            .open(assetPath)
-            .use { input ->
-
-                destFile
-                    .outputStream()
-                    .use { output ->
-
-                        input.copyTo(output)
-                    }
-            }
     }
 
     companion object {
-        private const val TAG =
-            "OnDeviceTranslationEngine"
+        private const val TAG = "OnDeviceTranslationEngine"
+        private const val MODELS_DIRECTORY = "models/indictrans2/int8"
+        private const val DECODER_LAYERS = 18
+        private const val NUM_HEADS = 8
+        private const val HEAD_SIZE = 64
+        private const val HIDDEN_SIZE = 512
+        private const val MAX_GENERATION_LENGTH = 256
+        private const val REPETITION_PENALTY = 1.2f
+        private const val MIN_NEW_TOKENS = 2
+        private val ATTENTION_TYPES = listOf("decoder", "encoder")
+        private val CACHE_COMPONENTS = listOf("key", "value")
+        private val MODEL_ASSETS = listOf(
+            "$MODELS_DIRECTORY/encoder_model.onnx",
+            "$MODELS_DIRECTORY/decoder_model.onnx",
+            "$MODELS_DIRECTORY/decoder_with_past_model.onnx",
+            "$MODELS_DIRECTORY/model.SRC",
+            "$MODELS_DIRECTORY/model.TGT",
+            "$MODELS_DIRECTORY/dict.SRC.json",
+            "$MODELS_DIRECTORY/dict.TGT.json"
+        )
     }
 }

@@ -1,5 +1,7 @@
 package com.eduvaani.flutter_app
 
+import android.content.Intent
+import android.os.Bundle
 import android.util.Log
 import com.eduvaani.flutter_app.ml.OnDeviceTranslationEngine
 import io.flutter.embedding.android.FlutterActivity
@@ -18,6 +20,39 @@ class MainActivity : FlutterActivity() {
     // Background scope for all ONNX init and inference work.
     // SupervisorJob means one failing coroutine does not cancel others.
     private val engineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        handleTranslationIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleTranslationIntent(intent)
+    }
+
+    private fun handleTranslationIntent(intent: Intent?) {
+        val text = intent?.getStringExtra("text") ?: return
+        val sourceLang = intent.getStringExtra("source_lang") ?: "hin_Deva"
+        val targetLang = intent.getStringExtra("target_lang") ?: "sat_Olck"
+        Log.i(TAG, "=== INTENT TRANSLATE TRIGGERED === text='$text' src='$sourceLang' tgt='$targetLang'")
+        engineScope.launch {
+            try {
+                if (translationEngine == null) {
+                    translationEngine = OnDeviceTranslationEngine(this@MainActivity)
+                }
+                val initOk = translationEngine?.initialize() ?: false
+                if (!initOk) {
+                    Log.e(TAG, "=== INTENT TRANSLATE FAILED: Engine init returned false ===")
+                    return@launch
+                }
+                val result = translationEngine?.translate(text, sourceLang, targetLang)
+                Log.i(TAG, "=== INTENT TRANSLATE SUCCESS === result='$result'")
+            } catch (e: Exception) {
+                Log.e(TAG, "=== INTENT TRANSLATE ERROR ===", e)
+            }
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

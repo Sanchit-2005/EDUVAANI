@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# ONNX generated/export files
+onnx_export_fp32/
+onnx_export_int8/
+
+# Temporary/testing Python scripts
+onnx_translate_lib.py
+stage1_pytorch_baseline.py
+stage2_compare_greedy.py
+stage2_export_onnx.py
+stage2_validate.py
+stage3_quantize.py
+stage3_quantize_v2.py
+stage3_validate.py
+palash-ai/flutter_app/test_device_translation.py
+
+# Windows accidental file
+nul

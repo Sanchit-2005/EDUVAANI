@@ -17,7 +17,7 @@ class IndicProcessor {
         visualize: Boolean = false
     ): List<String> {
         return texts.map { text ->
-            val normalized = normalizeText(text)
+            val normalized = normalizePreprocess(text)
             val result = "$srcLang $tgtLang $normalized"
             Log.d(TAG, "[ON_DEVICE] preprocess input='$text' src=$srcLang tgt=$tgtLang output='$result'")
             result
@@ -26,18 +26,24 @@ class IndicProcessor {
 
     fun postprocessBatch(texts: List<String>, lang: String): List<String> {
         return texts.map { text ->
-            normalizeText(text)
+            normalizePostprocess(text)
         }
     }
 
-    private fun normalizeText(text: String): String {
-        // Minimal normalization for prototype:
-        // - Trim whitespace
-        // - Normalize spaces
-        // - Keep the rest unchanged
-        // The real IndicProcessor performs script-specific normalization,
-        // but for this prototype we preserve the exact Unicode text.
-        return text.trim()
+    private fun normalizePreprocess(text: String): String {
+        // Space out punctuation symbols like IndicProcessor does for IndicTrans2:
+        val spaced = text
+            .replace(Regex("([.,?!:;।॥\\-–—()])"), " $1 ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        return spaced
+    }
+
+    private fun normalizePostprocess(text: String): String {
+        // Remove spaces before standard punctuation:
+        return text
+            .replace(Regex("\\s+([.,?!:;।॥)\\]])"), "$1")
+            .replace(Regex("([(\\[])\\s+"), "$1")
             .replace(Regex("\\s+"), " ")
             .trim()
     }

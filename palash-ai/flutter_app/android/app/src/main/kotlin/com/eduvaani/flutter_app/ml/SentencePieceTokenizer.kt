@@ -12,14 +12,12 @@ class SentencePieceTokenizer(private val context: Context) {
     // ── SRC SentencePiece data (used for encoding input text) ─────────────────
     private val srcSpmPieceToId = mutableMapOf<String, Int>()
     private val srcSpmIdToPiece = mutableMapOf<Int, String>()
-    private val srcSpmScores    = mutableMapOf<Int, Float>()
-    private val srcTrieRoot     = TrieNode()
+    private val srcSpmScores    = mutableMapOf<String, Float>()
 
     // ── TGT SentencePiece data (used for decoding output tokens) ──────────────
     private val tgtSpmPieceToId = mutableMapOf<String, Int>()
     private val tgtSpmIdToPiece = mutableMapOf<Int, String>()
-    private val tgtSpmScores    = mutableMapOf<Int, Float>()
-    private val tgtTrieRoot     = TrieNode()
+    private val tgtSpmScores    = mutableMapOf<String, Float>()
 
     // ── Fairseq vocab JSON maps ────────────────────────────────────────────────
     private val srcVocabPieceToId = mutableMapOf<String, Int>()
@@ -58,7 +56,6 @@ class SentencePieceTokenizer(private val context: Context) {
                 pieceToId        = srcSpmPieceToId,
                 idToPiece        = srcSpmIdToPiece,
                 scores           = srcSpmScores,
-                trieRoot         = srcTrieRoot,
                 isSrc            = true
             )
             srcLoaded = true
@@ -78,7 +75,6 @@ class SentencePieceTokenizer(private val context: Context) {
                 pieceToId        = tgtSpmPieceToId,
                 idToPiece        = tgtSpmIdToPiece,
                 scores           = tgtSpmScores,
-                trieRoot         = tgtTrieRoot,
                 isSrc            = false
             )
             tgtLoaded = true
@@ -168,8 +164,8 @@ class SentencePieceTokenizer(private val context: Context) {
         tgtLangId = srcVocabPieceToId[tgtLang] ?: unkId
         Log.d(TAG, "[SP] tgtLangId=$tgtLangId")
 
-        // Tokenise using the SRC trie → piece strings from srcSpmIdToPiece
-        val pieces = viterbiEncode(actualText, srcTrieRoot, srcSpmIdToPiece)
+        // Tokenise using BPE merges matching the IndicTrans2 SentencePiece BPE model
+        val pieces = bpeEncode(actualText, srcSpmScores)
         Log.d(TAG, "[SP] spm pieces=$pieces")
 
         // Map piece strings to IDs using the SRC fairseq vocab JSON
@@ -194,62 +190,39 @@ class SentencePieceTokenizer(private val context: Context) {
         return result
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────────
-
-    /**
-     * Viterbi segmentation using the provided trie and idToPiece map.
-     * Previously this used the shared (and overwritten) spmIdToPiece — that
-     * was the bug. Now each call explicitly passes the SRC or TGT structures.
-     */
-    private fun viterbiEncode(
-        text      : String,
-        trie      : TrieNode,
-        idToPiece : Map<Int, String>
-    ): List<String> {
-        val normalized = text.replace(' ', '▁')
-        val n          = normalized.length
-        if (n == 0) return emptyList()
-
-        val dp     = FloatArray(n + 1) { Float.NEGATIVE_INFINITY }
-        val parent = Array(n + 1) { Pair(-1, -1) }
-        dp[0] = 0f
-
-        for (i in 0 until n) {
-            if (dp[i] == Float.NEGATIVE_INFINITY) continue
-
-            var node: TrieNode? = trie
-            var j = i
-            while (node != null && j < n) {
-                val char = normalized[j].toString()
-                node = node.children[char]
-                if (node != null) {
-                    if (node.id != -1) {
-                        val newScore = dp[i] + node.score
-                        val endPos   = j + 1
-                        if (newScore > dp[endPos]) {
-                            dp[endPos]     = newScore
-                            parent[endPos] = Pair(i, node.id)
-                        }
-                    }
-                    j++
+    private fun bpeSegmentWord(word: String, pieceToScore: Map<String, Float>): List<String> {
+        val symbols = ArrayList<String>(word.length)
+        for (c in word) {
+            symbols.add(c.toString())
+        }
+        while (symbols.size > 1) {
+            var bestPair: String? = null
+            var bestScore = Float.NEGATIVE_INFINITY
+            var bestIdx = -1
+            for (i in 0 until symbols.size - 1) {
+                val pair = symbols[i] + symbols[i + 1]
+                val score = pieceToScore[pair]
+                if (score != null && score > bestScore) {
+                    bestScore = score
+                    bestPair = pair
+                    bestIdx = i
                 }
             }
+            if (bestIdx == -1 || bestPair == null) break
+            symbols[bestIdx] = bestPair
+            symbols.removeAt(bestIdx + 1)
         }
+        return symbols
+    }
 
-        if (dp[n] == Float.NEGATIVE_INFINITY) {
-            Log.w(TAG, "[SP] no complete segmentation, falling back to UNK per char")
-            return List(n) { "<unk>" }
+    private fun bpeEncode(text: String, pieceToScore: Map<String, Float>): List<String> {
+        val words = text.split(" ")
+        val pieces = mutableListOf<String>()
+        for (w in words) {
+            if (w.isEmpty()) continue
+            pieces.addAll(bpeSegmentWord("\u2581$w", pieceToScore))
         }
-
-        val result = mutableListOf<String>()
-        var pos = n
-        while (pos > 0) {
-            val (prev, pieceId) = parent[pos]
-            result.add(idToPiece[pieceId] ?: "<unk>")
-            pos = prev
-        }
-        result.reverse()
-        return result
+        return pieces
     }
 
     private fun decodePieces(pieces: List<String>): String {
@@ -273,8 +246,7 @@ class SentencePieceTokenizer(private val context: Context) {
         assetPath : String,
         pieceToId : MutableMap<String, Int>,
         idToPiece : MutableMap<Int, String>,
-        scores    : MutableMap<Int, Float>,
-        trieRoot  : TrieNode,
+        scores    : MutableMap<String, Float>,
         isSrc     : Boolean
     ) {
         Log.d(TAG, "Starting to load protobuf model from: $assetPath")
@@ -298,8 +270,7 @@ class SentencePieceTokenizer(private val context: Context) {
                             val id        = pieceToId.size
                             pieceToId[piece.first] = id
                             idToPiece[id]          = piece.first
-                            scores[id]             = piece.second
-                            addToTrie(piece.first, id, piece.second, trieRoot)
+                            scores[piece.first]    = piece.second
                         }
                         2 -> skipField(buffer, wireType)  // trainer_spec
                         3 -> skipField(buffer, wireType)  // normalizer_spec
@@ -353,15 +324,6 @@ class SentencePieceTokenizer(private val context: Context) {
         return Pair(piece, score)
     }
 
-    private fun addToTrie(piece: String, id: Int, score: Float, root: TrieNode) {
-        var node = root
-        for (char in piece) {
-            node = node.children.getOrPut(char.toString()) { TrieNode() }
-        }
-        node.id    = id
-        node.score = score
-    }
-
     private fun readVarint(buffer: ByteBuffer): Long {
         var result = 0L
         var shift  = 0
@@ -401,12 +363,6 @@ class SentencePieceTokenizer(private val context: Context) {
             }
             else -> throw IOException("Unknown wire type: $wireType")
         }
-    }
-
-    private class TrieNode {
-        val children = mutableMapOf<String, TrieNode>()
-        var id   : Int   = -1
-        var score: Float = 0f
     }
 
     companion object {
