@@ -1,14 +1,10 @@
 import 'package:just_audio/just_audio.dart';
 
+import '../ml/on_device_services.dart';
 import 'hindi_tts_service.dart';
 import 'text_to_speech_service.dart';
 
 /// Coordinates instruction playback for lesson screens.
-///
-/// The service deliberately uses the existing offline TTS adapters. Their
-/// current output is a demo audio cue rather than verified spoken Hindi or
-/// Santali, so callers must keep the UI's preview disclaimer visible until
-/// recorded audio or production TTS models are supplied.
 class LessonAudioService {
   LessonAudioService({
     AudioPlayer? player,
@@ -16,7 +12,7 @@ class LessonAudioService {
     TextToSpeechService? santaliTts,
   })  : _player = player ?? AudioPlayer(),
         _hindiTts = hindiTts ?? MockHindiTtsService(),
-        _santaliTts = santaliTts ?? MockTextToSpeechService();
+        _santaliTts = santaliTts ?? OnDeviceTTSService();
 
   final AudioPlayer _player;
   final HindiTtsService _hindiTts;

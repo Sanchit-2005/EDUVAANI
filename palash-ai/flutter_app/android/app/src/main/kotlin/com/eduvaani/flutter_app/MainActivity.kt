@@ -17,12 +17,34 @@ import kotlinx.coroutines.withContext
 class MainActivity : FlutterActivity() {
     private var translationEngine: OnDeviceTranslationEngine? = null
 
+    init {
+        try {
+            System.loadLibrary("onnxruntime")
+            Log.i(TAG, "Successfully loaded libonnxruntime.so in init")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Could not load libonnxruntime.so: ${t.message}")
+        }
+        try {
+            System.loadLibrary("sherpa-onnx-c-api")
+            Log.i(TAG, "Successfully loaded libsherpa-onnx-c-api.so in init")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Could not load libsherpa-onnx-c-api.so: ${t.message}")
+        }
+    }
+
     // Background scope for all ONNX init and inference work.
     // SupervisorJob means one failing coroutine does not cancel others.
     private val engineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        try {
+            System.loadLibrary("onnxruntime")
+            System.loadLibrary("sherpa-onnx-c-api")
+            Log.i(TAG, "Confirmed native libraries in onCreate")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Native library load in onCreate notice: ${t.message}")
+        }
         handleTranslationIntent(intent)
     }
 
@@ -172,5 +194,19 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
+        init {
+            try {
+                System.loadLibrary("onnxruntime")
+                Log.i(TAG, "Successfully loaded libonnxruntime.so")
+            } catch (t: Throwable) {
+                Log.w(TAG, "Could not load libonnxruntime.so: ${t.message}")
+            }
+            try {
+                System.loadLibrary("sherpa-onnx-c-api")
+                Log.i(TAG, "Successfully loaded libsherpa-onnx-c-api.so")
+            } catch (t: Throwable) {
+                Log.w(TAG, "Could not load libsherpa-onnx-c-api.so: ${t.message}")
+            }
+        }
     }
 }

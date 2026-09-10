@@ -1,14 +1,45 @@
 import 'dart:async';
 import 'dart:developer' as dev;
+import 'dart:ffi';
+import 'dart:io';
+import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
 
-import '../core/api_config.dart';
 import '../services/speech_recognition_service.dart';
 import '../services/text_to_speech_service.dart';
 import '../services/translation_service.dart';
+import 'asr_fuzzy_matcher.dart';
+import 'asr_session_logger.dart';
 import 'model_manager.dart';
+import 'santali_phoneme_map.dart';
+
+bool _sherpaBindingsInitialized = false;
+void _initSherpaBindings() {
+  if (!_sherpaBindingsInitialized) {
+    try {
+      debugPrint('[SherpaBindings] Initializing sherpa bindings...');
+      if (!kIsWeb && Platform.isAndroid) {
+        try {
+          DynamicLibrary.open('libonnxruntime.so');
+          debugPrint('[SherpaBindings] Successfully opened libonnxruntime.so in Dart');
+        } catch (e) {
+          debugPrint('[SherpaBindings] Warning opening libonnxruntime.so: $e');
+        }
+      }
+      sherpa.initBindings();
+      _sherpaBindingsInitialized = true;
+      debugPrint('[SherpaBindings] Successfully initialized sherpa bindings!');
+    } catch (e, st) {
+      debugPrint('[SherpaBindings] Error initializing sherpa bindings: $e\n$st');
+      rethrow;
+    }
+  }
+}
 
 /// ONNX-ready adapter boundaries. Inference is intentionally unavailable until
 /// validated, quantized model files are placed in the model manager location.
@@ -33,14 +64,161 @@ class _NoOnDeviceRuntimeError extends TranslationApiException {
 }
 
 class OnDeviceASRService implements SpeechRecognitionService {
-  OnDeviceASRService({ModelManager? manager}) : _manager = manager ?? ModelManager();
+  OnDeviceASRService({ModelManager? manager, ClassroomCommandFuzzyMatcher? fuzzyMatcher})
+      : _manager = manager ?? ModelManager(),
+        _fuzzyMatcher = fuzzyMatcher ?? ClassroomCommandFuzzyMatcher();
   final ModelManager _manager;
+  final ClassroomCommandFuzzyMatcher _fuzzyMatcher;
+
+  sherpa.OfflineRecognizer? _recognizer;
+  AsrModelPaths? _loadedModel;
+  AsrModelPaths? get loadedModel => _loadedModel;
+
+  Future<bool> isModelAvailable() async => _manager.isAsrReady();
+
+  Future<void> _ensureRecognizer() async {
+    if (kIsWeb) return;
+    if (_recognizer != null) return;
+
+    final paths = await _manager.findAsrModel();
+    if (paths == null) return;
+
+    try {
+      _initSherpaBindings();
+      final sherpa.OfflineModelConfig modelConfig;
+
+      if (paths.type == AsrModelType.whisper) {
+        modelConfig = sherpa.OfflineModelConfig(
+          tokens: paths.tokensPath,
+          whisper: sherpa.OfflineWhisperModelConfig(
+            encoder: paths.encoderPath!,
+            decoder: paths.decoderPath!,
+            language: 'hi',
+            task: 'transcribe',
+          ),
+          modelType: 'whisper',
+          numThreads: 2,
+          debug: false,
+        );
+      } else if (paths.type == AsrModelType.senseVoice) {
+        modelConfig = sherpa.OfflineModelConfig(
+          tokens: paths.tokensPath,
+          senseVoice: sherpa.OfflineSenseVoiceModelConfig(
+            model: paths.modelPath!,
+            language: 'hi',
+            useInverseTextNormalization: true,
+          ),
+          numThreads: 2,
+          debug: false,
+        );
+      } else {
+        modelConfig = sherpa.OfflineModelConfig(
+          tokens: paths.tokensPath,
+          nemoCtc: sherpa.OfflineNemoEncDecCtcModelConfig(
+            model: paths.modelPath!,
+          ),
+          numThreads: 2,
+          debug: false,
+        );
+      }
+
+      final feat = sherpa.FeatureConfig(sampleRate: 16000, featureDim: 80);
+      final config = sherpa.OfflineRecognizerConfig(feat: feat, model: modelConfig);
+      _recognizer = sherpa.OfflineRecognizer(config);
+      _loadedModel = paths;
+      _debugLog('[OnDeviceASRService] Successfully loaded ${paths.type} model');
+    } catch (e) {
+      _debugLog('[OnDeviceASRService] Failed to initialize recognizer: $e');
+      _recognizer = null;
+    }
+  }
 
   @override
-  Future<SpeechRecognitionResult> transcribeHindi(String audioPath) async {
+  Future<SpeechRecognitionResult> transcribeHindi(
+    String audioPath, {
+    String? demoTranscript,
+  }) async {
+    final sw = Stopwatch()..start();
     if (kIsWeb) throw const _NoOnDeviceRuntimeError('On-device Hindi ASR');
-    await _manager.requireModel(ModelManager.hindiAsr);
-    throw UnsupportedError('Hindi ONNX ASR inference is not bundled in this prototype.');
+
+    final audioFile = File(audioPath);
+    if (!await audioFile.exists()) {
+      throw StateError('The recording could not be found at $audioPath');
+    }
+
+    await _ensureRecognizer();
+
+    if (_recognizer != null) {
+      try {
+        final wave = sherpa.readWave(audioPath);
+        final rawSamples = wave.samples;
+        
+        // Apply 300ms silence padding (at wave.sampleRate) universally to prevent
+        // short-utterance edge-frame truncation on CTC feature extraction.
+        final paddingLen = (wave.sampleRate * 0.3).round();
+        final paddedSamples = Float32List(rawSamples.length + paddingLen * 2);
+        paddedSamples.setRange(paddingLen, paddingLen + rawSamples.length, rawSamples);
+
+        final stream = _recognizer!.createStream();
+        stream.acceptWaveform(samples: paddedSamples, sampleRate: wave.sampleRate);
+        _recognizer!.decode(stream);
+        final result = _recognizer!.getResult(stream);
+        stream.free();
+        sw.stop();
+
+        // ── Fuzzy post-processing ───────────────────────────────────────
+        final rawText = result.text.trim();
+        final matchResult = _fuzzyMatcher.matchCommand(rawText);
+
+        // Log raw + corrected for every session (never discard the raw signal).
+        AsrSessionLogger.instance.log(
+          rawTranscript: matchResult.rawTranscript,
+          correctedTranscript: matchResult.correctedTranscript,
+          wasMatchApplied: matchResult.wasMatchApplied,
+          similarityScore: matchResult.similarityScore,
+          matchedCommand: matchResult.matchedCommand,
+        );
+
+        return SpeechRecognitionResult(
+          transcript: matchResult.correctedTranscript,
+          rawTranscript: matchResult.rawTranscript,
+          duration: sw.elapsed,
+          isMock: false,
+        );
+      } catch (e) {
+        _debugLog('[OnDeviceASRService] Sherpa inference failed: $e');
+        if (demoTranscript != null) {
+          sw.stop();
+          return SpeechRecognitionResult(
+            transcript: demoTranscript,
+            duration: sw.elapsed,
+            isMock: true,
+          );
+        }
+        rethrow;
+      }
+    }
+
+    if (demoTranscript != null) {
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      sw.stop();
+      return SpeechRecognitionResult(
+        transcript: demoTranscript,
+        duration: sw.elapsed,
+        isMock: true,
+      );
+    }
+
+    throw const ModelUnavailableException(ModelManager.hindiAsr);
+  }
+
+  void dispose() {
+    _recognizer?.free();
+    _recognizer = null;
+  }
+
+  void _debugLog(String message) {
+    if (kDebugMode) dev.log(message, name: 'OnDeviceASRService');
   }
 }
 
@@ -61,8 +239,8 @@ class OnDeviceTranslationService implements TranslationService {
     required String sourceLanguage,
     required String targetLanguage,
   }) async {
-    final trimmed = text.trim();
-    if (trimmed.isEmpty) {
+    final normalized = normalizeTranslationInput(text, sourceLanguage);
+    if (normalized.isEmpty) {
       throw const TranslationApiException(
         kind: TranslationFailureKind.request,
         message: 'Please enter text to translate.',
@@ -84,7 +262,7 @@ class OnDeviceTranslationService implements TranslationService {
       final result = await _channel.invokeMethod<Map<dynamic, dynamic>>(
         'translate',
         {
-          'text': trimmed,
+          'text': normalized,
           'source_lang': sourceLanguage,
           'target_lang': targetLanguage,
         },
@@ -115,10 +293,11 @@ class OnDeviceTranslationService implements TranslationService {
       }
 
       return TranslationResult(
-        source: trimmed,
+        source: normalized,
         output: translation,
         isPrototype: false,
         matchedPhrase: false,
+        model: 'ai4bharat/indictrans2-indic-indic-dist-320M (On-Device)',
       );
     } on MissingPluginException catch (error) {
       // No handler registered for this channel on this platform/build — the
@@ -168,10 +347,129 @@ class OnDeviceTTSService implements TextToSpeechService {
   OnDeviceTTSService({ModelManager? manager}) : _manager = manager ?? ModelManager();
   final ModelManager _manager;
 
-  @override
-  Future<TextToSpeechResult> synthesizeSantali(String text) async {
-    if (kIsWeb) throw const _NoOnDeviceRuntimeError('On-device Santali TTS');
-    await _manager.requireModel(ModelManager.santaliTts);
-    throw UnsupportedError('Santali ONNX TTS inference is not bundled in this prototype.');
+  sherpa.OfflineTts? _tts;
+  TtsModelPaths? _loadedModel;
+  TtsModelPaths? get loadedModel => _loadedModel;
+
+  Future<bool> isModelAvailable() async => _manager.isTtsReady();
+
+  Future<void> _ensureTts() async {
+    if (kIsWeb) return;
+    if (_tts != null) return;
+
+    final paths = await _manager.findTtsModel();
+    if (paths == null) return;
+
+    try {
+      _initSherpaBindings();
+      _debugLog('[OnDeviceTTSService] Initializing OfflineTts with model: ${paths.modelPath}, tokens: ${paths.tokensPath}, dataDir: ${paths.dataDirPath}');
+      final vits = sherpa.OfflineTtsVitsModelConfig(
+        model: paths.modelPath,
+        tokens: paths.tokensPath,
+        dataDir: paths.dataDirPath ?? '',
+        lexicon: paths.lexiconPath ?? '',
+      );
+      final model = sherpa.OfflineTtsModelConfig(
+        vits: vits,
+        numThreads: 2,
+        debug: false,
+      );
+      final config = sherpa.OfflineTtsConfig(model: model);
+      _tts = sherpa.OfflineTts(config);
+      _loadedModel = paths;
+      _debugLog('[OnDeviceTTSService] Loaded TTS model from ${paths.modelPath}');
+    } catch (e, st) {
+      _debugLog('[OnDeviceTTSService] Failed to initialize TTS: $e\n$st');
+      _tts = null;
+    }
   }
-}
+
+  @override
+  Future<TextToSpeechResult> synthesizeSantali(
+    String text, {
+    int speakerId = 0,
+    double speed = 1.0,
+    bool fallbackToDemo = true,
+  }) async {
+    final sw = Stopwatch()..start();
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError.value(text, 'text', 'Santali text cannot be empty.');
+    }
+
+    // Option A: Phonetic fallback from Santali (Ol Chiki) to Hindi Devanagari phonemes
+    final phonemes = santaliToHindiPhonemes(trimmed);
+    _debugLog('Transliterated Ol Chiki "$trimmed" -> Devanagari phonemes "$phonemes"');
+
+    if (kIsWeb) {
+      if (fallbackToDemo) {
+        return MockTextToSpeechService().synthesizeSantali(trimmed);
+      }
+      throw const _NoOnDeviceRuntimeError('On-device Santali TTS');
+    }
+
+    await _ensureTts();
+    _debugLog('[OnDeviceTTSService] _ensureTts complete. _tts is null? ${_tts == null}');
+
+    if (_tts != null) {
+      try {
+        _debugLog('[OnDeviceTTSService] Generating audio for "$phonemes", sid: $speakerId');
+        final audio = _tts!.generate(
+          text: phonemes,
+          sid: speakerId,
+          speed: speed,
+        );
+        _debugLog('[OnDeviceTTSService] Generated ${audio.samples.length} samples at ${audio.sampleRate}Hz');
+
+        final directory = await _getTempDir();
+        final outPath = p.join(
+          directory.path,
+          'eduvaani_santali_${trimmed.hashCode.abs()}_sid$speakerId.wav',
+        );
+
+        sherpa.writeWave(
+          filename: outPath,
+          samples: audio.samples,
+          sampleRate: audio.sampleRate,
+        );
+        _debugLog('[OnDeviceTTSService] Wrote wave to $outPath');
+        sw.stop();
+        return TextToSpeechResult(
+          audioPath: outPath,
+          duration: sw.elapsed,
+          isMock: false,
+        );
+      } catch (e, st) {
+        _debugLog('[OnDeviceTTSService] Sherpa TTS generation error: $e\n$st');
+        if (fallbackToDemo) {
+          return MockTextToSpeechService().synthesizeSantali(trimmed);
+        }
+        rethrow;
+      }
+    }
+
+    if (fallbackToDemo) {
+      return MockTextToSpeechService().synthesizeSantali(trimmed);
+    }
+
+    throw const ModelUnavailableException(ModelManager.santaliTts);
+  }
+
+  Future<Directory> _getTempDir() async {
+    try {
+      return await getTemporaryDirectory();
+    } catch (_) {
+      return Directory.systemTemp;
+    }
+  }
+
+  void dispose() {
+    _tts?.free();
+    _tts = null;
+  }
+
+  void _debugLog(String message) {
+    debugPrint(message);
+    if (kDebugMode) dev.log(message, name: 'OnDeviceTTSService');
+  }
+}

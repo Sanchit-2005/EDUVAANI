@@ -26,9 +26,9 @@ from pydantic import BaseModel, field_validator
 
 # Support both `python app.py` (direct) and `python -m translation_service` (package).
 try:
-    from .translator import translator, MODEL_ID, SUPPORTED_PAIRS
+    from .translator import translator, MODEL_ID, SUPPORTED_PAIRS, normalize_text_input
 except ImportError:
-    from translator import translator, MODEL_ID, SUPPORTED_PAIRS
+    from translator import translator, MODEL_ID, SUPPORTED_PAIRS, normalize_text_input
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -101,6 +101,7 @@ class TranslateResponse(BaseModel):
     translation: str
     source_language: str
     target_language: str
+    model: str
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -149,9 +150,11 @@ async def translate(req: TranslateRequest):
             detail={"success": False, "error": "Model is not loaded yet."},
         )
 
+    normalized_input = normalize_text_input(req.text, req.source_language)
+
     try:
         output = translator.translate(
-            text=req.text,
+            text=normalized_input,
             source_language=req.source_language,
             target_language=req.target_language,
         )
@@ -169,10 +172,11 @@ async def translate(req: TranslateRequest):
 
     return TranslateResponse(
         success=True,
-        input=req.text,
+        input=normalized_input,
         translation=output,
         source_language=req.source_language,
         target_language=req.target_language,
+        model=MODEL_ID,
     )
 
 

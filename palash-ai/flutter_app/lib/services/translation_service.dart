@@ -15,6 +15,7 @@ class TranslationResult {
     required this.output,
     required this.isPrototype,
     required this.matchedPhrase,
+    this.model,
     this.note,
   });
 
@@ -28,7 +29,37 @@ class TranslationResult {
   /// true only when a phrase-tile exact match was used (mock path)
   final bool matchedPhrase;
 
+  /// Model name/version identifier (e.g. 'ai4bharat/indictrans2-indic-indic-dist-320M')
+  final String? model;
+
   final String? note;
+}
+
+/// Normalizes whitespace and sentence-ending punctuation for cross-platform model parity.
+///
+/// Ensures inputs like "शांत बैठो", "शांत बैठो।", "शांत बैठो.", and " शांत बैठो "
+/// all normalize to "शांत बैठो।" before tokenization or caching.
+String normalizeTranslationInput(String text, String sourceLanguage) {
+  var normalized = text.trim().replaceAll(RegExp(r'\s+'), ' ');
+  if (normalized.isEmpty) return normalized;
+
+  if (sourceLanguage == 'hin_Deva') {
+    // Convert trailing ASCII period to Devanagari danda
+    normalized = normalized.replaceAll(RegExp(r'\.+$'), '।');
+    // If text does not end with sentence punctuation (।, ?, !, |), append danda
+    if (!RegExp(r'[।?!|]$').hasMatch(normalized)) {
+      normalized = '$normalized।';
+    }
+  } else if (sourceLanguage == 'sat_Olck') {
+    // Convert trailing period or danda to Santali Mu Tudag (U+1C7E)
+    normalized = normalized.replaceAll(RegExp(r'[.।]+$'), '᱾');
+    // If text does not end with sentence punctuation (᱾, ᱿, ?, !), append Mu Tudag
+    if (!RegExp(r'[᱾᱿?!]$').hasMatch(normalized)) {
+      normalized = '$normalized᱾';
+    }
+  }
+
+  return normalized;
 }
 
 class ClassroomPhrase {
@@ -52,7 +83,7 @@ abstract class TranslationService {
 
   /// The active translation service used by [TextTranslatorScreen].
   /// Points at [ApiTranslationService] which calls the real IndicTrans2 model.
-  static final TranslationService instance = ApiTranslationService();
+  static TranslationService instance = ApiTranslationService();
 
   /// Classroom phrase list — used by phrase-tiles and the mock path.
   static List<ClassroomPhrase> get phrases => MockTranslationService.phrases;
@@ -147,8 +178,8 @@ class ApiTranslationService implements TranslationService {
     required String sourceLanguage,
     required String targetLanguage,
   }) async {
-    final trimmed = text.trim();
-    if (trimmed.isEmpty) {
+    final normalized = normalizeTranslationInput(text, sourceLanguage);
+    if (normalized.isEmpty) {
       throw const TranslationApiException(
         kind: TranslationFailureKind.request,
         message: 'Please enter text to translate.',
@@ -158,7 +189,7 @@ class ApiTranslationService implements TranslationService {
     // An exact in-memory ML result may return immediately. A miss always
     // continues to the Node.js /api/translate endpoint; the offline dictionary
     // is deliberately never consulted here.
-    final key = _cacheKey(trimmed, sourceLanguage, targetLanguage);
+    final key = _cacheKey(normalized, sourceLanguage, targetLanguage);
     final cached = _cache[key];
     if (cached != null) {
       _debugLog('[TranslationService] ML cache hit');
@@ -187,7 +218,7 @@ class ApiTranslationService implements TranslationService {
               Uri.parse(endpoint),
               headers: {'Content-Type': 'application/json'},
               body: jsonEncode({
-                'text': trimmed,
+                'text': normalized,
                 'source_language': sourceLanguage,
                 'target_language': targetLanguage,
               }),
@@ -261,17 +292,19 @@ class ApiTranslationService implements TranslationService {
         );
       }
 
+      final model = body['model'] as String? ?? 'ai4bharat/indictrans2-indic-indic-dist-320M';
       final result = TranslationResult(
-        source: trimmed,
+        source: normalized,
         output: translation,
         isPrototype: false,
         matchedPhrase: false,
+        model: model,
       );
       if (_cache.length >= _maxCacheSize) {
         _cache.remove(_cache.keys.first);
       }
       _cache[key] = result;
-      _debugLog('[TranslationService] IndicTrans2 translation cached');
+      _debugLog('[TranslationService] IndicTrans2 translation cached (model: $model)');
       return result;
     }
 

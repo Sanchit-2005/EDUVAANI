@@ -134,4 +134,69 @@ void main() {
       expect(error.kind, TranslationFailureKind.unavailable);
     }
   });
+
+  group('normalizeTranslationInput', () {
+    test('normalizes Hindi variations to exact same string with danda', () {
+      expect(normalizeTranslationInput('शांत बैठो', 'hin_Deva'), 'शांत बैठो।');
+      expect(normalizeTranslationInput('शांत बैठो।', 'hin_Deva'), 'शांत बैठो।');
+      expect(normalizeTranslationInput('शांत बैठो.', 'hin_Deva'), 'शांत बैठो।');
+      expect(normalizeTranslationInput('  शांत   बैठो   ', 'hin_Deva'), 'शांत बैठो।');
+      expect(normalizeTranslationInput('यह कितने हैं?', 'hin_Deva'), 'यह कितने हैं?');
+      expect(normalizeTranslationInput('सावधान!', 'hin_Deva'), 'सावधान!');
+    });
+
+    test('normalizes Santali variations to exact same string with Mu Tudag', () {
+      expect(normalizeTranslationInput('ᱥᱟᱱᱛᱤ ᱛᱮ ᱫᱩᱲᱩᱵ ᱯᱮ', 'sat_Olck'), 'ᱥᱟᱱᱛᱤ ᱛᱮ ᱫᱩᱲᱩᱵ ᱯᱮ᱾');
+      expect(normalizeTranslationInput('ᱥᱟᱱᱛᱤ ᱛᱮ ᱫᱩᱲᱩᱵ ᱯᱮ᱾', 'sat_Olck'), 'ᱥᱟᱱᱛᱤ ᱛᱮ ᱫᱩᱲᱩᱵ ᱯᱮ᱾');
+      expect(normalizeTranslationInput('ᱥᱟᱱᱛᱤ ᱛᱮ ᱫᱩᱲᱩᱵ ᱯᱮ.', 'sat_Olck'), 'ᱥᱟᱱᱛᱤ ᱛᱮ ᱫᱩᱲᱩᱵ ᱯᱮ᱾');
+      expect(normalizeTranslationInput('  ᱥᱟᱱᱛᱤ  ᱛᱮ  ᱫᱩᱲᱩᱵ  ᱯᱮ  ', 'sat_Olck'), 'ᱥᱟᱱᱛᱤ ᱛᱮ ᱫᱩᱲᱩᱵ ᱯᱮ᱾');
+      expect(normalizeTranslationInput('ᱱᱚᱣᱟ ᱛᱤᱱᱟᱹᱜ ᱢᱮᱱᱟᱜᱼᱟ?', 'sat_Olck'), 'ᱱᱚᱣᱟ ᱛᱤᱱᱟᱹᱜ ᱢᱮᱱᱟᱜᱼᱟ?');
+    });
+  });
+
+  test('translating "शांत बैठो" and "शांत बैठो।" results in cache hit and identical output', () async {
+    final client = _FakeHttpClient((request) async {
+      final body = jsonDecode((request as http.Request).body);
+      expect(body['text'], 'शांत बैठो।');
+      return _jsonResponse(request, 200, const {
+        'success': true,
+        'input': 'शांत बैठो।',
+        'translation': 'ᱥᱟᱹᱱᱛᱤ ᱛᱮ ᱥᱮᱱ ᱢᱮ ᱾',
+        'source_language': 'hin_Deva',
+        'target_language': 'sat_Olck',
+        'model': 'ai4bharat/indictrans2-indic-indic-dist-320M',
+      });
+    });
+
+    final service = ApiTranslationService(client: client);
+
+    // Call 1: Without danda
+    final result1 = await service.translate(
+      text: 'शांत बैठो',
+      sourceLanguage: 'hin_Deva',
+      targetLanguage: 'sat_Olck',
+    );
+
+    // Call 2: With danda — must hit cache, no second HTTP request!
+    final result2 = await service.translate(
+      text: 'शांत बैठो।',
+      sourceLanguage: 'hin_Deva',
+      targetLanguage: 'sat_Olck',
+    );
+
+    // Call 3: With ASCII period — must also hit cache!
+    final result3 = await service.translate(
+      text: 'शांत बैठो.',
+      sourceLanguage: 'hin_Deva',
+      targetLanguage: 'sat_Olck',
+    );
+
+    expect(client.requests, hasLength(1), reason: 'All variations must hit cache after first request');
+    expect(result1.output, 'ᱥᱟᱹᱱᱛᱤ ᱛᱮ ᱥᱮᱱ ᱢᱮ ᱾');
+    expect(result2.output, 'ᱥᱟᱹᱱᱛᱤ ᱛᱮ ᱥᱮᱱ ᱢᱮ ᱾');
+    expect(result3.output, 'ᱥᱟᱹᱱᱛᱤ ᱛᱮ ᱥᱮᱱ ᱢᱮ ᱾');
+    expect(result1.model, 'ai4bharat/indictrans2-indic-indic-dist-320M');
+    expect(result2.model, 'ai4bharat/indictrans2-indic-indic-dist-320M');
+    expect(result3.model, 'ai4bharat/indictrans2-indic-indic-dist-320M');
+  });
 }

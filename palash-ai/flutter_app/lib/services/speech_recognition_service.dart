@@ -7,9 +7,21 @@ class SpeechRecognitionResult {
     required this.transcript,
     required this.duration,
     required this.isMock,
-  });
+    String? rawTranscript,
+  }) : rawTranscript = rawTranscript ?? transcript;
 
+  /// Final transcript to use downstream.
+  ///
+  /// When the fuzzy command matcher fires this is the corrected command string.
+  /// When no match exceeds the threshold this equals [rawTranscript].
   final String transcript;
+
+  /// Unmodified CTC output before any post-processing.
+  ///
+  /// Preserved for debug display and session-log tuning. Equals [transcript]
+  /// when no fuzzy correction was applied.
+  final String rawTranscript;
+
   final Duration duration;
   final bool isMock;
 }

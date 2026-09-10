@@ -122,6 +122,7 @@ def test_hindi_to_santali_hello():
     assert translation and translation.strip(), f"translation is empty: {body}"
     assert body.get("source_language") == "hin_Deva"
     assert body.get("target_language") == "sat_Olck"
+    assert body.get("model") == "ai4bharat/indictrans2-indic-indic-dist-320M"
     print(f"          → '{body['input']}' → '{translation}'")
 
 
@@ -226,6 +227,29 @@ def test_missing_text_field():
     assert status == 422, f"Expected 422, got {status}. Body: {body}"
 
 
+def test_punctuation_parity():
+    status1, body1 = _post({
+        "text": "शांत बैठो",
+        "source_language": "hin_Deva",
+        "target_language": "sat_Olck",
+    })
+    status2, body2 = _post({
+        "text": "शांत बैठो।",
+        "source_language": "hin_Deva",
+        "target_language": "sat_Olck",
+    })
+    status3, body3 = _post({
+        "text": "शांत बैठो.",
+        "source_language": "hin_Deva",
+        "target_language": "sat_Olck",
+    })
+    assert status1 == 200 and status2 == 200 and status3 == 200
+    assert body1.get("model") == "ai4bharat/indictrans2-indic-indic-dist-320M"
+    assert body1["input"] == body2["input"] == body3["input"] == "शांत बैठो।"
+    assert body1["translation"] == body2["translation"] == body3["translation"]
+    print(f"          → identical translation verified: '{body1['translation']}'")
+
+
 # ── Runner ────────────────────────────────────────────────────────────────────
 
 def main():
@@ -269,6 +293,9 @@ def main():
 
     print("\nCase 10 Missing 'text' field → 422")
     run("missing text field rejected", test_missing_text_field)
+
+    print("\nCase 11 Punctuation parity (शांत बैठो vs शांत बैठो।)")
+    run("punctuation normalization produces identical output", test_punctuation_parity)
 
     # ── Summary ───────────────────────────────────────────────────────────────
     passed = sum(1 for _, s, _ in results if s == PASS)

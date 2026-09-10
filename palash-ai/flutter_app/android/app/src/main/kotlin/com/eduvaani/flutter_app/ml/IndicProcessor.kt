@@ -33,16 +33,16 @@ class IndicProcessor {
     private fun normalizePreprocess(text: String): String {
         // Space out punctuation symbols like IndicProcessor does for IndicTrans2:
         val spaced = text
-            .replace(Regex("([.,?!:;।॥\\-–—()])"), " $1 ")
+            .replace(Regex("([.,?!:;।॥᱾᱿\\-–—()])"), " $1 ")
             .replace(Regex("\\s+"), " ")
             .trim()
         return spaced
     }
 
     private fun normalizePostprocess(text: String): String {
-        // Remove spaces before standard punctuation:
+        // Remove spaces before standard punctuation including Santali Ol Chiki:
         return text
-            .replace(Regex("\\s+([.,?!:;।॥)\\]])"), "$1")
+            .replace(Regex("\\s+([.,?!:;।॥᱾᱿)\\]])"), "$1")
             .replace(Regex("([(\\[])\\s+"), "$1")
             .replace(Regex("\\s+"), " ")
             .trim()

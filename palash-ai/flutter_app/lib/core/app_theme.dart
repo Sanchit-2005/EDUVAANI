@@ -181,14 +181,18 @@ class AppTheme {
     ).apply(
       bodyColor: AppColors.textPrimary,
       displayColor: AppColors.textPrimary,
+      fontFamilyFallback: const ['NotoSansOlChiki', 'NotoSansDevanagari'],
     );
 
-    final titleTextTheme = GoogleFonts.outfitTextTheme(baseTextTheme);
+    final titleTextTheme = GoogleFonts.outfitTextTheme(baseTextTheme).apply(
+      fontFamilyFallback: const ['NotoSansOlChiki', 'NotoSansDevanagari'],
+    );
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: cs,
       scaffoldBackgroundColor: AppColors.surface,
+      fontFamilyFallback: const ['NotoSansOlChiki', 'NotoSansDevanagari'],
       textTheme: titleTextTheme,
 
       appBarTheme: AppBarTheme(

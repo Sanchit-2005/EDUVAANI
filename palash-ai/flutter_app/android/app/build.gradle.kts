@@ -39,6 +39,9 @@ android {
         resources {
             excludes += "META-INF/*"
         }
+        jniLibs {
+            pickFirsts += "**/libonnxruntime.so"
+        }
     }
 }
 

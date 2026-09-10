@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as dev;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -22,7 +23,13 @@ class TextTranslatorScreen extends StatefulWidget {
 class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
   final _controller = TextEditingController();
   final _player = AudioPlayer();
-  final TextToSpeechService _ttsService = MockTextToSpeechService();
+  // On-device TTS: feeds Ol Chiki output through the phoneme map → Hindi TTS.
+  // Provides real audio synthesis for native Santali-speaker review, bypassing
+  // ASR entirely. The mock is only used as emergency fallback on web.
+  final OnDeviceTTSService _ttsService = OnDeviceTTSService();
+
+  /// True when the on-device Piper TTS model is installed on this device.
+  bool _isTtsModelInstalled = false;
 
   bool _hindiToSantali = true;
 
@@ -56,9 +63,21 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   @override
+  void initState() {
+    super.initState();
+    _checkTtsModel();
+  }
+
+  Future<void> _checkTtsModel() async {
+    final ready = await _ttsService.isModelAvailable();
+    if (mounted) setState(() => _isTtsModelInstalled = ready);
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     _player.dispose();
+    _ttsService.dispose();
     super.dispose();
   }
 
@@ -150,20 +169,50 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
 
   // ── Santali audio playback ────────────────────────────────────────────────
 
+  /// Synthesizes and plays the Ol Chiki translation output via the on-device
+  /// Piper TTS model (phoneme map → Hindi acoustic model).
+  ///
+  /// Only callable when direction is Hindi→Santali (i.e. [_hindiToSantali] is
+  /// true) so TTS is always operating on Ol Chiki text, not Hindi input.
   Future<void> _playSantaliAudio() async {
+    // Guard: TTS only makes sense for Santali (Ol Chiki) output.
+    if (!_hindiToSantali) return;
+
     final text = _result?.output ?? '';
     if (text.isEmpty) return;
+
+    if (!_isTtsModelInstalled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'TTS model not installed. Download it from Model Settings to hear Santali audio.',
+          ),
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
     setState(() => _creatingAudio = true);
     try {
-      final output = await _ttsService.synthesizeSantali(text);
+      final output = await _ttsService.synthesizeSantali(
+        text,
+        fallbackToDemo: false,
+      );
       await _player.setFilePath(output.audioPath);
       await _player.play();
       if (!mounted) return;
       setState(() => _ttsResult = output);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to create Santali demo audio.')),
+        SnackBar(
+          content: Text(
+            kIsWeb
+                ? 'Santali TTS is only available in the Android app.'
+                : 'Santali audio synthesis failed. Please try again.',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _creatingAudio = false);
@@ -269,12 +318,16 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
                               color: Colors.white, size: 22),
                         ),
                         const SizedBox(width: 10),
-                        const Text(
-                          'Text Translator',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
+                        const Expanded(
+                          child: Text(
+                            'Text Translator',
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ],
@@ -410,12 +463,16 @@ class _TextTranslatorScreenState extends State<TextTranslatorScreen> {
                 const SizedBox(height: AppSpacing.lg),
                 Row(
                   children: [
-                    const Text(
-                      'Classroom Phrases',
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
+                    const Flexible(
+                      child: Text(
+                        'Classroom Phrases',
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -484,12 +541,16 @@ class _DirectionTab extends StatelessWidget {
                 color: selected ? Colors.white : AppColors.textSecondary,
               ),
               const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: selected ? Colors.white : AppColors.textSecondary,
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: selected ? Colors.white : AppColors.textSecondary,
+                  ),
                 ),
               ),
             ],
@@ -589,7 +650,9 @@ class _TranslationErrorCard extends StatelessWidget {
 
 // ── Result card ───────────────────────────────────────────────────────────────
 
-class _ResultCard extends StatelessWidget {
+// ── Result card ───────────────────────────────────────────────────────────────
+
+class _ResultCard extends StatefulWidget {
   const _ResultCard({
     required this.result,
     required this.hindiToSantali,
@@ -605,19 +668,67 @@ class _ResultCard extends StatelessWidget {
   final VoidCallback onPlayAudio;
 
   @override
+  State<_ResultCard> createState() => _ResultCardState();
+}
+
+class _ResultCardState extends State<_ResultCard> {
+  bool _copied = false;
+  Timer? _copyTimer;
+
+  @override
+  void dispose() {
+    _copyTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ResultCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.result.output != widget.result.output) {
+      _copyTimer?.cancel();
+      _copied = false;
+    }
+  }
+
+  void _copyToClipboard() {
+    final text = widget.result.output.trim();
+    if (text.isEmpty) return;
+
+    Clipboard.setData(ClipboardData(text: text));
+    _copyTimer?.cancel();
+    setState(() => _copied = true);
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Copied to clipboard'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    _copyTimer = Timer(const Duration(milliseconds: 1800), () {
+      if (mounted) {
+        setState(() => _copied = false);
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final bool isReal = !result.isPrototype;
+    final bool isReal = !widget.result.isPrototype;
     final String chipLabel = isReal
-        ? 'IndicTrans2'
-        : (result.matchedPhrase ? 'Phrase match' : 'Prototype / partial');
+        ? (widget.result.model ?? 'IndicTrans2')
+        : (widget.result.matchedPhrase ? 'Phrase match' : 'Prototype / partial');
     final ChipStyle chipStyle = isReal
         ? ChipStyle.success
-        : (result.matchedPhrase ? ChipStyle.success : ChipStyle.warning);
+        : (widget.result.matchedPhrase ? ChipStyle.success : ChipStyle.warning);
     final IconData chipIcon = isReal
         ? Icons.auto_awesome_rounded
-        : (result.matchedPhrase
+        : (widget.result.matchedPhrase
             ? Icons.check_circle_rounded
             : Icons.warning_amber_rounded);
+
+    final bool hasOutput = widget.result.output.trim().isNotEmpty;
 
     return Container(
       decoration: BoxDecoration(
@@ -629,47 +740,52 @@ class _ResultCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header row
+          // Header row: model badge (wrapped in Expanded to prevent overflow) + copy button
           Padding(
             padding: const EdgeInsets.fromLTRB(
                 AppSpacing.md, AppSpacing.md, AppSpacing.sm, 0),
             child: Row(
               children: [
-                StatusChip(
-                  label: chipLabel,
-                  style: chipStyle,
-                  icon: chipIcon,
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: StatusChip(
+                      label: chipLabel,
+                      style: chipStyle,
+                      icon: chipIcon,
+                    ),
+                  ),
                 ),
-                const Spacer(),
+                const SizedBox(width: AppSpacing.xs),
                 IconButton(
-                  tooltip: 'Copy',
-                  icon: const Icon(Icons.copy_rounded, size: 18),
-                  color: AppColors.textSecondary,
-                  onPressed: result.output.isEmpty
-                      ? null
-                      : () {
-                          Clipboard.setData(
-                              ClipboardData(text: result.output));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Copied to clipboard')),
-                          );
-                        },
+                  key: const ValueKey('copy-translation-button'),
+                  tooltip: _copied ? 'Copied' : 'Copy',
+                  icon: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      _copied ? Icons.check_rounded : Icons.copy_rounded,
+                      key: ValueKey<bool>(_copied),
+                      size: 18,
+                      color: _copied ? AppColors.success : AppColors.textSecondary,
+                    ),
+                  ),
+                  onPressed: hasOutput ? _copyToClipboard : null,
                 ),
               ],
             ),
           ),
 
-          // Translation output with explicit dark charcoal text
+          // Translation output with explicit dark charcoal text and Ol Chiki/Devanagari font fallback
           Padding(
             padding: const EdgeInsets.fromLTRB(AppSpacing.md,
                 AppSpacing.sm, AppSpacing.md, AppSpacing.md),
             child: SelectableText(
-              result.output.isEmpty ? '—' : result.output,
+              widget.result.output.isEmpty ? '—' : widget.result.output,
               style: TextStyle(
-                color: result.output.isEmpty
+                color: widget.result.output.isEmpty
                     ? AppColors.textHint
                     : AppColors.textPrimary,
+                fontFamilyFallback: const ['NotoSansOlChiki', 'NotoSansDevanagari'],
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
                 height: 1.3,
@@ -677,12 +793,12 @@ class _ResultCard extends StatelessWidget {
             ),
           ),
 
-          if (result.note != null)
+          if (widget.result.note != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(
                   AppSpacing.md, 0, AppSpacing.md, AppSpacing.sm),
               child: Text(
-                result.note!,
+                widget.result.note!,
                 style: const TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 12,
@@ -691,7 +807,7 @@ class _ResultCard extends StatelessWidget {
             ),
 
           // Audio button (Santali output only)
-          if (hindiToSantali) ...[
+          if (widget.hindiToSantali) ...[
             const Divider(height: 1),
             Padding(
               padding: const EdgeInsets.all(AppSpacing.md),
@@ -699,8 +815,8 @@ class _ResultCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: creatingAudio ? null : onPlayAudio,
-                      icon: creatingAudio
+                      onPressed: widget.creatingAudio ? null : widget.onPlayAudio,
+                      icon: widget.creatingAudio
                           ? const SizedBox(
                               width: 16,
                               height: 16,
@@ -708,7 +824,7 @@ class _ResultCard extends StatelessWidget {
                                   strokeWidth: 2),
                             )
                           : const Icon(Icons.volume_up_rounded, size: 18),
-                      label: Text(creatingAudio
+                      label: Text(widget.creatingAudio
                           ? 'Generating audio…'
                           : 'Play Santali audio'),
                       style: OutlinedButton.styleFrom(
@@ -719,11 +835,11 @@ class _ResultCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (ttsResult != null) ...[
+                  if (widget.ttsResult != null) ...[
                     const SizedBox(width: 10),
                     StatusChip(
                       label:
-                          '${ttsResult!.duration.inMilliseconds} ms',
+                          '${widget.ttsResult!.duration.inMilliseconds} ms',
                       style: ChipStyle.info,
                       icon: Icons.timer_rounded,
                     ),
@@ -775,6 +891,7 @@ class _PhraseTile extends StatelessWidget {
                     hindiToSantali ? phrase.hindi : phrase.santali,
                     style: const TextStyle(
                       color: AppColors.textPrimary,
+                      fontFamilyFallback: ['NotoSansOlChiki', 'NotoSansDevanagari'],
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),

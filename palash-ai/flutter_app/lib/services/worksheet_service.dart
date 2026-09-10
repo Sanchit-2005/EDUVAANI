@@ -374,7 +374,7 @@ class WorksheetService {
               padding:
                   const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: pw.BoxDecoration(
-                color: PdfColors.white.withAlpha(40),
+                color: const PdfColor(1, 1, 1, 0.15),
                 borderRadius: pw.BorderRadius.circular(4),
               ),
               child: pw.Text('$grade  •  $subject',
@@ -477,7 +477,6 @@ class WorksheetService {
       padding: const pw.EdgeInsets.fromLTRB(14, 10, 14, 12),
       decoration: pw.BoxDecoration(
         color: bg,
-        borderRadius: pw.BorderRadius.circular(6),
         border: pw.Border(left: pw.BorderSide(color: border, width: 4)),
       ),
       child: pw.Column(
@@ -486,7 +485,7 @@ class WorksheetService {
           pw.Container(
             padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: pw.BoxDecoration(
-              color: border.withAlpha(30),
+              color: border.withAlpha(30 / 255.0),
               borderRadius: pw.BorderRadius.circular(3),
             ),
             child: pw.Text(heading,
@@ -705,7 +704,7 @@ class WorksheetService {
   pw.Widget _thinDivider(_WsPalette pal) {
     return pw.Container(
       height: 1,
-      color: pal.sectionDivider.withAlpha(60),
+      color: pal.sectionDivider.withAlpha(60 / 255.0),
     );
   }
 

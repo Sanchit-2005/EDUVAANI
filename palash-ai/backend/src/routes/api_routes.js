@@ -113,6 +113,24 @@ export async function getTranslationServiceHealth() {
   };
 }
 
+function normalizeTranslationInput(text, sourceLanguage) {
+  let normalized = (text ?? '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return normalized;
+
+  if (sourceLanguage === 'hin_Deva') {
+    normalized = normalized.replace(/\.+$/, '।');
+    if (!/[।?!|]$/.test(normalized)) {
+      normalized += '।';
+    }
+  } else if (sourceLanguage === 'sat_Olck') {
+    normalized = normalized.replace(/[.।]+$/, '᱾');
+    if (!/[᱾᱿?!]$/.test(normalized)) {
+      normalized += '᱾';
+    }
+  }
+  return normalized;
+}
+
 apiRouter.post('/translate', async (request, response) => {
   const { text, source_language, target_language } = request.body ?? {};
 
@@ -146,6 +164,8 @@ apiRouter.post('/translate', async (request, response) => {
     });
   }
 
+  const normalizedText = normalizeTranslationInput(text, source_language);
+
   // ── Forward to Python translation service ────────────────────────────────
   const endpoint = `${PYTHON_URL}/translate`;
   logDevelopment(`[translate] POST ${endpoint}`);
@@ -156,7 +176,7 @@ apiRouter.post('/translate', async (request, response) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        text: text.trim(),
+        text: normalizedText,
         source_language,
         target_language,
       }),
@@ -217,7 +237,10 @@ apiRouter.post('/translate', async (request, response) => {
     });
   }
 
-  return response.json(body);
+  return response.json({
+    ...body,
+    model: body?.model ?? 'ai4bharat/indictrans2-indic-indic-dist-320M',
+  });
 });
 
 apiRouter.get('/lessons', async (_, response) => response.json({ data: await getLessons() }));

@@ -50,6 +50,31 @@ LENGTH_PENALTY = 1.0
 DO_SAMPLE = False
 REPETITION_PENALTY = 1.2
 
+import re
+
+
+# ── Input Normalization ───────────────────────────────────────────────────────
+
+def normalize_text_input(text: str, source_language: str) -> str:
+    """
+    Normalize whitespace and sentence-ending punctuation for consistent tokenization.
+    Both 'शांत बैठो' and 'शांत बैठो।' normalize to 'शांत बैठो।'.
+    """
+    normalized = re.sub(r"\s+", " ", text).strip()
+    if not normalized:
+        return normalized
+
+    if source_language == "hin_Deva":
+        normalized = re.sub(r"\.+$", "।", normalized)
+        if not re.search(r"[।?!|]$", normalized):
+            normalized += "।"
+    elif source_language == "sat_Olck":
+        normalized = re.sub(r"[.।]+$", "᱾", normalized)
+        if not re.search(r"[᱾᱿?!]$", normalized):
+            normalized += "᱾"
+
+    return normalized
+
 
 # ── Translator class ──────────────────────────────────────────────────────────
 
@@ -152,7 +177,7 @@ class IndicTransTranslator:
         if not self._loaded:
             raise RuntimeError("Model is not loaded. Call load() first.")
 
-        text = text.strip()
+        text = normalize_text_input(text, source_language)
         if not text:
             raise ValueError("Input text must not be empty.")
 
