@@ -61,8 +61,8 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Voice Speaker:'), findsOneWidget);
-      expect(find.text('Male (Voice 0)'), findsOneWidget);
-      expect(find.text('Female (Voice 1)'), findsOneWidget);
+      expect(find.text('Female (Priyamvada)'), findsOneWidget);
+      expect(find.textContaining('Male'), findsOneWidget);
       expect(find.text('Or pick classroom phrase'), findsOneWidget);
     });
 
@@ -127,11 +127,13 @@ void main() {
       await tester.pumpWidget(createSubject());
       await tester.pump(const Duration(milliseconds: 200));
 
-      final femaleChip = find.text('Female (Voice 1)');
+      final femaleChip = find.text('Female (Priyamvada)');
       await tester.tap(femaleChip);
       await tester.pump(const Duration(milliseconds: 200));
 
-      final maleChip = find.text('Male (Voice 0)');
+      final maleChip = find.byWidgetPredicate(
+        (w) => w is ChoiceChip && w.avatar is Icon && (w.avatar as Icon).icon == Icons.male_rounded,
+      );
       await tester.tap(maleChip);
       await tester.pump(const Duration(milliseconds: 200));
 

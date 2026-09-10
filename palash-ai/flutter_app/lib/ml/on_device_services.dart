@@ -347,22 +347,32 @@ class OnDeviceTTSService implements TextToSpeechService {
   OnDeviceTTSService({ModelManager? manager}) : _manager = manager ?? ModelManager();
   final ModelManager _manager;
 
-  sherpa.OfflineTts? _tts;
-  TtsModelPaths? _loadedModel;
-  TtsModelPaths? get loadedModel => _loadedModel;
+  final Map<String, sherpa.OfflineTts> _ttsEngines = {};
+  final Map<String, TtsModelPaths> _loadedModels = {};
+
+  TtsModelPaths? get loadedModel => _loadedModels.values.firstOrNull;
 
   Future<bool> isModelAvailable() async => _manager.isTtsReady();
+  Future<bool> isMaleModelAvailable() async => _manager.isTtsMaleReady();
+  Future<bool> isFemaleModelAvailable() async => _manager.isTtsFemaleReady();
 
-  Future<void> _ensureTts() async {
-    if (kIsWeb) return;
-    if (_tts != null) return;
+  Future<sherpa.OfflineTts?> _ensureTtsForGender(String gender) async {
+    if (kIsWeb) return null;
+    final cached = _ttsEngines[gender];
+    if (cached != null) return cached;
 
-    final paths = await _manager.findTtsModel();
-    if (paths == null) return;
+    // Look for gender-specific model, fallback to any available model
+    var paths = await _manager.findTtsModel(gender: gender);
+    if (paths == null && gender == 'male') {
+      // Specifically requested male model but not found
+      return null;
+    }
+    paths ??= await _manager.findTtsModel();
+    if (paths == null) return null;
 
     try {
       _initSherpaBindings();
-      _debugLog('[OnDeviceTTSService] Initializing OfflineTts with model: ${paths.modelPath}, tokens: ${paths.tokensPath}, dataDir: ${paths.dataDirPath}');
+      _debugLog('[OnDeviceTTSService] Initializing OfflineTts ($gender) with model: ${paths.modelPath}, tokens: ${paths.tokensPath}, dataDir: ${paths.dataDirPath}');
       final vits = sherpa.OfflineTtsVitsModelConfig(
         model: paths.modelPath,
         tokens: paths.tokensPath,
@@ -375,12 +385,14 @@ class OnDeviceTTSService implements TextToSpeechService {
         debug: false,
       );
       final config = sherpa.OfflineTtsConfig(model: model);
-      _tts = sherpa.OfflineTts(config);
-      _loadedModel = paths;
-      _debugLog('[OnDeviceTTSService] Loaded TTS model from ${paths.modelPath}');
+      final engine = sherpa.OfflineTts(config);
+      _ttsEngines[gender] = engine;
+      _loadedModels[gender] = paths;
+      _debugLog('[OnDeviceTTSService] Loaded TTS model for $gender from ${paths.modelPath}');
+      return engine;
     } catch (e, st) {
-      _debugLog('[OnDeviceTTSService] Failed to initialize TTS: $e\n$st');
-      _tts = null;
+      _debugLog('[OnDeviceTTSService] Failed to initialize TTS for $gender: $e\n$st');
+      return null;
     }
   }
 
@@ -388,6 +400,7 @@ class OnDeviceTTSService implements TextToSpeechService {
   Future<TextToSpeechResult> synthesizeSantali(
     String text, {
     int speakerId = 0,
+    String? gender,
     double speed = 1.0,
     bool fallbackToDemo = true,
   }) async {
@@ -397,9 +410,14 @@ class OnDeviceTTSService implements TextToSpeechService {
       throw ArgumentError.value(text, 'text', 'Santali text cannot be empty.');
     }
 
+    // Determine target voice gender: 0 = female (Priyamvada), 1 = male (Rohan)
+    final targetGender = gender != null
+        ? gender.toLowerCase().trim()
+        : (speakerId == 1 ? 'male' : 'female');
+
     // Option A: Phonetic fallback from Santali (Ol Chiki) to Hindi Devanagari phonemes
     final phonemes = santaliToHindiPhonemes(trimmed);
-    _debugLog('Transliterated Ol Chiki "$trimmed" -> Devanagari phonemes "$phonemes"');
+    _debugLog('Transliterated Ol Chiki "$trimmed" -> Devanagari phonemes "$phonemes" ($targetGender)');
 
     if (kIsWeb) {
       if (fallbackToDemo) {
@@ -408,15 +426,16 @@ class OnDeviceTTSService implements TextToSpeechService {
       throw const _NoOnDeviceRuntimeError('On-device Santali TTS');
     }
 
-    await _ensureTts();
-    _debugLog('[OnDeviceTTSService] _ensureTts complete. _tts is null? ${_tts == null}');
+    final engine = await _ensureTtsForGender(targetGender);
+    _debugLog('[OnDeviceTTSService] _ensureTtsForGender($targetGender) complete. engine is null? ${engine == null}');
 
-    if (_tts != null) {
+    if (engine != null) {
       try {
-        _debugLog('[OnDeviceTTSService] Generating audio for "$phonemes", sid: $speakerId');
-        final audio = _tts!.generate(
+        _debugLog('[OnDeviceTTSService] Generating audio for "$phonemes", gender: $targetGender, sid: 0');
+        // Note: single-speaker Piper models require sid: 0
+        final audio = engine.generate(
           text: phonemes,
-          sid: speakerId,
+          sid: 0,
           speed: speed,
         );
         _debugLog('[OnDeviceTTSService] Generated ${audio.samples.length} samples at ${audio.sampleRate}Hz');
@@ -424,7 +443,7 @@ class OnDeviceTTSService implements TextToSpeechService {
         final directory = await _getTempDir();
         final outPath = p.join(
           directory.path,
-          'eduvaani_santali_${trimmed.hashCode.abs()}_sid$speakerId.wav',
+          'eduvaani_santali_${trimmed.hashCode.abs()}_${targetGender}_sid$speakerId.wav',
         );
 
         sherpa.writeWave(
@@ -464,8 +483,11 @@ class OnDeviceTTSService implements TextToSpeechService {
   }
 
   void dispose() {
-    _tts?.free();
-    _tts = null;
+    for (final engine in _ttsEngines.values) {
+      engine.free();
+    }
+    _ttsEngines.clear();
+    _loadedModels.clear();
   }
 
   void _debugLog(String message) {

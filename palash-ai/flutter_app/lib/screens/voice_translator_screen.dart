@@ -55,11 +55,13 @@ class _VoiceTranslatorScreenState extends State<VoiceTranslatorScreen>
   TextToSpeechResult? _ttsResult;
   Duration? _translationDuration;
   VoicePipelineStage _stage = VoicePipelineStage.idle;
-  int _speakerId = 0; // 0: Male, 1: Female
+  int _speakerId = 0; // 0: Female (Priyamvada), 1: Male (Rohan)
 
   final bool _useOnDevice = !kIsWeb;
   bool _isAsrModelInstalled = false;
   bool _isTtsModelInstalled = false;
+  bool _isMaleTtsAvailable = false;
+  bool _isFemaleTtsAvailable = false;
 
   @override
   void initState() {
@@ -77,10 +79,14 @@ class _VoiceTranslatorScreenState extends State<VoiceTranslatorScreen>
   Future<void> _checkModelAvailability() async {
     final asrReady = await _asrService.isModelAvailable();
     final ttsReady = await _ttsService.isModelAvailable();
+    final maleReady = await _ttsService.isMaleModelAvailable();
+    final femaleReady = await _ttsService.isFemaleModelAvailable();
     if (mounted) {
       setState(() {
         _isAsrModelInstalled = asrReady;
         _isTtsModelInstalled = ttsReady;
+        _isMaleTtsAvailable = maleReady;
+        _isFemaleTtsAvailable = femaleReady;
       });
     }
   }
@@ -528,51 +534,81 @@ class _VoiceTranslatorScreenState extends State<VoiceTranslatorScreen>
                     borderRadius: BorderRadius.circular(AppRadius.md),
                     border: Border.all(color: AppColors.border),
                   ),
-                  child: Row(
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    runAlignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
-                      const Icon(
-                        Icons.record_voice_over_rounded,
-                        size: 18,
-                        color: AppColors.textSecondary,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(
+                            Icons.record_voice_over_rounded,
+                            size: 18,
+                            color: AppColors.textSecondary,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Voice Speaker:',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Voice Speaker:',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const Spacer(),
-                      ChoiceChip(
-                        label: const Text('Male (Voice 0)', style: TextStyle(fontSize: 12)),
-                        selected: _speakerId == 0,
-                        onSelected: _busy
-                            ? null
-                            : (sel) {
-                                if (sel) {
-                                  setState(() => _speakerId = 0);
-                                  if (_result != null) {
-                                    _translateAndSynthesize(_hindiController.text);
-                                  }
-                                }
-                              },
-                      ),
-                      const SizedBox(width: 8),
-                      ChoiceChip(
-                        label: const Text('Female (Voice 1)', style: TextStyle(fontSize: 12)),
-                        selected: _speakerId == 1,
-                        onSelected: _busy
-                            ? null
-                            : (sel) {
-                                if (sel) {
-                                  setState(() => _speakerId = 1);
-                                  if (_result != null) {
-                                    _translateAndSynthesize(_hindiController.text);
-                                  }
-                                }
-                              },
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ChoiceChip(
+                            avatar: const Icon(Icons.female_rounded, size: 16),
+                            label: const Text('Female (Priyamvada)', style: TextStyle(fontSize: 12)),
+                            selected: _speakerId == 0,
+                            onSelected: _busy
+                                ? null
+                                : (sel) {
+                                    if (sel) {
+                                      setState(() => _speakerId = 0);
+                                      if (_result != null) {
+                                        _translateAndSynthesize(_hindiController.text);
+                                      }
+                                    }
+                                  },
+                          ),
+                          const SizedBox(width: 8),
+                          ChoiceChip(
+                            avatar: const Icon(Icons.male_rounded, size: 16),
+                            label: Text(
+                              _isMaleTtsAvailable ? 'Male (Rohan)' : 'Male (Coming Soon)',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: _isMaleTtsAvailable ? null : AppColors.textSecondary,
+                              ),
+                            ),
+                            selected: _speakerId == 1,
+                            onSelected: _busy
+                                ? null
+                                : (sel) {
+                                    if (sel) {
+                                      if (!_isMaleTtsAvailable) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Male voice (Rohan) is coming soon / not installed yet.'),
+                                            duration: Duration(seconds: 2),
+                                          ),
+                                        );
+                                      }
+                                      setState(() => _speakerId = 1);
+                                      if (_result != null) {
+                                        _translateAndSynthesize(_hindiController.text);
+                                      }
+                                    }
+                                  },
+                          ),
+                        ],
                       ),
                     ],
                   ),

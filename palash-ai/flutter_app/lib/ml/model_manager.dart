@@ -127,7 +127,6 @@ class ModelManager {
       try {
         if (!await dir.exists()) continue;
         final files = await dir.list().toList();
-        final fileNames = files.map((e) => p.basename(e.path).toLowerCase()).toList();
 
       // Find tokens.txt
       final tokensFile = files.cast<FileSystemEntity?>().firstWhere(
@@ -202,10 +201,10 @@ class ModelManager {
   /// Locates installed Hindi TTS model files.
   ///
   /// Searches `<modelsDir>/tts/`, `<modelsDir>/tts-hindi/`, `<modelsDir>/hindi_tts/`,
-  /// and `<modelsDir>/` for VITS/Piper ONNX model artifacts.
-  Future<TtsModelPaths?> findTtsModel() async {
+  /// and subdirectories for gender-specific models (e.g. `male/`, `female/`, `rohan/`, `priyamvada/`).
+  Future<TtsModelPaths?> findTtsModel({String? gender}) async {
     final baseDir = await modelsDirectory();
-    final List<Directory> candidateDirs = [
+    final List<Directory> searchBases = [
       Directory(p.join(baseDir.path, 'tts')),
       Directory(p.join(baseDir.path, 'tts-hindi')),
       Directory(p.join(baseDir.path, 'hindi_tts')),
@@ -213,57 +212,111 @@ class ModelManager {
     ];
 
     try {
-      candidateDirs.add(Directory('/sdcard/Download/eduvaani_models/tts'));
-      candidateDirs.add(Directory('/sdcard/Download/eduvaani_models'));
+      searchBases.add(Directory('/sdcard/Download/eduvaani_models/tts'));
+      searchBases.add(Directory('/sdcard/Download/eduvaani_models'));
       final ext = await getExternalStorageDirectory();
       if (ext != null) {
-        candidateDirs.add(Directory(p.join(ext.path, 'models', 'tts')));
-        candidateDirs.add(Directory(p.join(ext.path, 'models')));
+        searchBases.add(Directory(p.join(ext.path, 'models', 'tts')));
+        searchBases.add(Directory(p.join(ext.path, 'models')));
       }
     } catch (_) {}
+
+    final List<Directory> candidateDirs = [];
+    final g = gender?.toLowerCase().trim();
+
+    if (g == 'male' || g == 'rohan') {
+      for (final b in searchBases) {
+        candidateDirs.add(Directory(p.join(b.path, 'male')));
+        candidateDirs.add(Directory(p.join(b.path, 'rohan')));
+      }
+      for (final b in searchBases) {
+        candidateDirs.add(Directory('${b.path}_male'));
+        candidateDirs.add(Directory('${b.path}-male'));
+      }
+    } else if (g == 'female' || g == 'priyamvada') {
+      for (final b in searchBases) {
+        candidateDirs.add(Directory(p.join(b.path, 'female')));
+        candidateDirs.add(Directory(p.join(b.path, 'priyamvada')));
+      }
+      for (final b in searchBases) {
+        candidateDirs.add(Directory('${b.path}_female'));
+        candidateDirs.add(Directory('${b.path}-female'));
+      }
+      candidateDirs.addAll(searchBases);
+    } else {
+      candidateDirs.addAll(searchBases);
+    }
 
     for (final dir in candidateDirs) {
       try {
         if (!await dir.exists()) continue;
         final files = await dir.list().toList();
 
-      // Find tokens.txt
-      final tokensFile = files.cast<FileSystemEntity?>().firstWhere(
-            (e) => e != null && (p.basename(e.path).toLowerCase() == 'tokens.txt' ||
-                p.basename(e.path).toLowerCase().endsWith('tts_tokens.txt')),
-            orElse: () => null,
-          );
-      if (tokensFile == null) continue;
+        // Find tokens.txt
+        final tokensFile = files.cast<FileSystemEntity?>().firstWhere(
+              (e) => e != null && (p.basename(e.path).toLowerCase() == 'tokens.txt' ||
+                  p.basename(e.path).toLowerCase().endsWith('tts_tokens.txt')),
+              orElse: () => null,
+            );
+        if (tokensFile == null) continue;
 
-      // Find model.onnx (or vits/piper onnx)
-      final ttsModel = files.cast<FileSystemEntity?>().firstWhere(
-            (e) => e != null &&
-                p.extension(e.path).toLowerCase() == '.onnx' &&
-                !p.basename(e.path).toLowerCase().contains('indictrans') &&
-                !p.basename(e.path).toLowerCase().contains('asr') &&
-                !p.basename(e.path).toLowerCase().contains('encoder') &&
-                !p.basename(e.path).toLowerCase().contains('decoder'),
-            orElse: () => null,
-          );
-      if (ttsModel == null) continue;
+        // Find model.onnx (or vits/piper onnx)
+        final ttsModel = files.cast<FileSystemEntity?>().firstWhere(
+              (e) => e != null &&
+                  p.extension(e.path).toLowerCase() == '.onnx' &&
+                  !p.basename(e.path).toLowerCase().contains('indictrans') &&
+                  !p.basename(e.path).toLowerCase().contains('asr') &&
+                  !p.basename(e.path).toLowerCase().contains('encoder') &&
+                  !p.basename(e.path).toLowerCase().contains('decoder'),
+              orElse: () => null,
+            );
+        if (ttsModel == null) continue;
 
-      // Optional lexicon or espeak data dir
-      final lexiconFile = files.cast<FileSystemEntity?>().firstWhere(
-            (e) => e != null && (p.basename(e.path).toLowerCase() == 'lexicon.txt' ||
-                p.basename(e.path).toLowerCase().endsWith('lexicon.txt')),
-            orElse: () => null,
-          );
-      final espeakDir = files.cast<FileSystemEntity?>().firstWhere(
-            (e) => e is Directory && p.basename(e.path).toLowerCase().contains('espeak'),
-            orElse: () => null,
-          );
+        final baseName = p.basename(ttsModel.path).toLowerCase();
+        if ((g == 'male' || g == 'rohan') && baseName.contains('priyamvada')) {
+          continue;
+        }
+        if ((g == 'female' || g == 'priyamvada') &&
+            (baseName.contains('rohan') || baseName.contains('pratham'))) {
+          continue;
+        }
 
-      return TtsModelPaths(
-        modelPath: ttsModel.path,
-        tokensPath: tokensFile.path,
-        lexiconPath: lexiconFile?.path,
-        dataDirPath: espeakDir?.path,
-      );
+        // Optional lexicon or espeak data dir (check local dir, then fallback to parent)
+        final lexiconFile = files.cast<FileSystemEntity?>().firstWhere(
+              (e) => e != null && (p.basename(e.path).toLowerCase() == 'lexicon.txt' ||
+                  p.basename(e.path).toLowerCase().endsWith('lexicon.txt')),
+              orElse: () => null,
+            );
+
+        var espeakDir = files.cast<FileSystemEntity?>().firstWhere(
+              (e) => e is Directory && p.basename(e.path).toLowerCase().contains('espeak'),
+              orElse: () => null,
+            );
+
+        if (espeakDir == null) {
+          final parentDir = dir.parent;
+          if (await parentDir.exists()) {
+            final parentFiles = await parentDir.list().toList();
+            espeakDir = parentFiles.cast<FileSystemEntity?>().firstWhere(
+                  (e) => e is Directory && p.basename(e.path).toLowerCase().contains('espeak'),
+                  orElse: () => null,
+                );
+          }
+        }
+
+        final detectedGender = (baseName.contains('rohan') ||
+                baseName.contains('pratham') ||
+                dir.path.toLowerCase().contains('male'))
+            ? 'male'
+            : 'female';
+
+        return TtsModelPaths(
+          modelPath: ttsModel.path,
+          tokensPath: tokensFile.path,
+          lexiconPath: lexiconFile?.path,
+          dataDirPath: espeakDir?.path,
+          gender: detectedGender,
+        );
       } catch (_) {}
     }
 
@@ -275,10 +328,13 @@ class ModelManager {
     return asr != null;
   }
 
-  Future<bool> isTtsReady() async {
-    final tts = await findTtsModel();
+  Future<bool> isTtsReady({String? gender}) async {
+    final tts = await findTtsModel(gender: gender);
     return tts != null;
   }
+
+  Future<bool> isTtsMaleReady() => isTtsReady(gender: 'male');
+  Future<bool> isTtsFemaleReady() => isTtsReady(gender: 'female');
 }
 
 enum AsrModelType { whisper, senseVoice, nemoCtc, none }
@@ -305,11 +361,13 @@ class TtsModelPaths {
     required this.tokensPath,
     this.dataDirPath,
     this.lexiconPath,
+    this.gender,
   });
 
   final String modelPath;
   final String tokensPath;
   final String? dataDirPath;
   final String? lexiconPath;
+  final String? gender;
 }
 
